@@ -15,18 +15,21 @@ city:TransitObservation a rdfs:Class ;
 city:UrbanStressObservation a rdfs:Class ;
     rdfs:label "Urban stress observation" .
 
-city:stationCode a rdf:Property ;
-    rdfs:label "station code" .
-
-city:name a rdf:Property ;
-    rdfs:label "name" .
-
-city:address a rdf:Property ;
-    rdfs:label "address" .
-
-city:isActive a rdf:Property ;
-    rdfs:label "is active" ;
-    rdfs:range xsd:boolean .
-
-city:stationCategory a rdf:Property ;
-    rdfs:label "station category" .
+city:stationCode a rdf:Property ; rdfs:label "station code" .
+city:name a rdf:Property ; rdfs:label "name" .
+city:address a rdf:Property ; rdfs:label "address" .
+city:isActive a rdf:Property ; rdfs:label "is active" ; rdfs:range xsd:boolean .
+city:stationCategory a rdf:Property ; rdfs:label "station category" .
+city:observedAt a rdf:Property ; rdfs:label "observed at" ; rdfs:range xsd:dateTime .
+city:temperatureCelsius a rdf:Property ; rdfs:label "temperature in degrees Celsius" ; rdfs:range xsd:double .
+city:relativeHumidityPercent a rdf:Property ; rdfs:label "relative humidity percent" ; rdfs:range xsd:double .
+city:pressureHpa a rdf:Property ; rdfs:label "mean sea level pressure in hPa" ; rdfs:range xsd:double .
+city:windSpeedKmh a rdf:Property ; rdfs:label "wind speed in kilometres per hour" ; rdfs:range xsd:double .
+city:weatherCondition a rdf:Property ; rdfs:label "weather condition" .
+city:totalTripUpdates a rdf:Property ; rdfs:label "total trip updates" ; rdfs:range xsd:integer .
+city:delayedTripUpdates a rdf:Property ; rdfs:label "delayed trip updates" ; rdfs:range xsd:integer .
+city:maxDelaySeconds a rdf:Property ; rdfs:label "maximum delay in seconds" ; rdfs:range xsd:integer .
+city:delayedShare a rdf:Property ; rdfs:label "share of delayed trip updates" ; rdfs:range xsd:double .
+city:urbanStressIndex a rdf:Property ; rdfs:label "urban stress index" ; rdfs:range xsd:double .
+city:heatStressComponent a rdf:Property ; rdfs:label "heat stress component" ; rdfs:range xsd:double .
+city:transitStressComponent a rdf:Property ; rdfs:label "transit stress component" ; rdfs:range xsd:double .
