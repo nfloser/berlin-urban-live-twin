@@ -4,11 +4,11 @@
 
 The Urban Stress Index is an exploratory derived-information model used to demonstrate how observations from independent urban domains can be transformed into a new semantic quantity. It is not intended as a validated public-health, mobility, or policy indicator.
 
-The present model combines three interpretable components:
+The live model combines three interpretable components:
 
-- an air-quality component derived from an ordinal air-quality grade;
-- a heat component derived from ambient temperature; and
-- a transit component derived from the share of delayed public-transport trip updates.
+- an air-quality component derived from the worst current official Berlin LQI station grade;
+- a heat component derived from the latest Berlin temperature observation; and
+- a transit component derived from the latest share of delayed VBB trip updates.
 
 ## Normalisation
 
@@ -40,11 +40,29 @@ UrbanStress = 100 * (0.40 * A + 0.30 * H + 0.30 * T)
 
 The weights and thresholds are deliberately explicit. This makes the derivation reproducible and allows later empirical calibration without changing the semantic integration architecture.
 
-## Current status
+## Temporal consistency
 
-The calculation and its RDF representation are implemented and covered by automated tests. The derived-information module is not yet connected to the live refresh pipeline because the shared graph currently contains air-quality station metadata but not live Berlin air-quality-index observations.
+A cross-domain value is only generated when the latest LQI, weather, and transit source observations are sufficiently aligned in time. The current prototype permits a maximum spread of two hours between the oldest and newest source timestamps. If that condition is violated, the analysis agent raises an error instead of publishing a misleading mixed-age observation.
 
-The model will only be integrated into the live pipeline after air-quality measurement ingestion has been implemented and tested. This prevents the demonstrator from presenting synthetic or manually supplied values as live city observations.
+This rule is separate from absolute freshness. A later iteration can additionally compare all source timestamps with wall-clock time and expose a formal freshness status through the API.
+
+## Live pipeline
+
+The analysis module is now part of the top-level refresh workflow. The sequence is:
+
+```text
+Air quality + LQI -> air-quality.ttl
+Weather           -> weather.ttl
+VBB realtime      -> transit.ttl
+                         |
+                         v
+                  Analysis agent
+                         |
+                         v
+                  urban-stress.ttl
+```
+
+The derived observation is represented as RDF with its source-time-aligned observation timestamp and component values. The FastAPI backend exposes the latest result through `GET /urban-stress`.
 
 ## Interpretation
 
