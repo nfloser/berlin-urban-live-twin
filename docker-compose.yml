@@ -35,7 +35,7 @@ services:
         condition: service_healthy
     environment:
       TWIN_DATA_DIR: /data
-      TWIN_GRAPH_STORE_URL: http://fuseki:3030/twin/data?default
+      TWIN_SPARQL_ENDPOINT_URL: http://fuseki:3030/twin/sparql
     volumes:
       - ./data:/data:ro
     ports:
