@@ -9,24 +9,28 @@ from app.agent import AirQualityAgent
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Refresh Berlin air-quality station metadata.")
+    parser = argparse.ArgumentParser(
+        description="Refresh Berlin air-quality station metadata and live LQI data."
+    )
     parser.add_argument("--output", type=Path, help="Optional Turtle output file.")
     return parser.parse_args()
 
 
 def main() -> None:
-    """Run one station-ingestion cycle and optionally persist the RDF graph."""
+    """Run one air-quality ingestion cycle and optionally persist the RDF graph."""
     args = parse_args()
     agent = AirQualityAgent()
-    result = agent.refresh_stations()
+    stations = agent.refresh_stations()
+    lqi = agent.refresh_lqi()
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         agent.knowledge_graph.graph.serialize(destination=args.output, format="turtle")
 
     print(
-        f"Air-quality station refresh completed: "
-        f"{result.ingested} ingested, {result.rejected} rejected."
+        "Air-quality refresh completed: "
+        f"stations={stations.ingested} ingested/{stations.rejected} rejected, "
+        f"lqi={lqi.ingested} ingested/{lqi.rejected} rejected."
     )
 
 
