@@ -6,6 +6,9 @@
 city:AirQualityStation a rdfs:Class ;
     rdfs:label "Air quality station" .
 
+city:AirQualityIndexObservation a rdfs:Class ;
+    rdfs:label "Air quality index observation" .
+
 city:WeatherObservation a rdfs:Class ;
     rdfs:label "Weather observation" .
 
@@ -21,6 +24,8 @@ city:address a rdf:Property ; rdfs:label "address" .
 city:isActive a rdf:Property ; rdfs:label "is active" ; rdfs:range xsd:boolean .
 city:stationCategory a rdf:Property ; rdfs:label "station category" .
 city:observedAt a rdf:Property ; rdfs:label "observed at" ; rdfs:range xsd:dateTime .
+city:airQualityGrade a rdf:Property ; rdfs:label "Berlin air quality index grade" ; rdfs:range xsd:integer .
+city:observedAtStation a rdf:Property ; rdfs:label "observed at station" .
 city:temperatureCelsius a rdf:Property ; rdfs:label "temperature in degrees Celsius" ; rdfs:range xsd:double .
 city:relativeHumidityPercent a rdf:Property ; rdfs:label "relative humidity percent" ; rdfs:range xsd:double .
 city:pressureHpa a rdf:Property ; rdfs:label "mean sea level pressure in hPa" ; rdfs:range xsd:double .
@@ -31,5 +36,6 @@ city:delayedTripUpdates a rdf:Property ; rdfs:label "delayed trip updates" ; rdf
 city:maxDelaySeconds a rdf:Property ; rdfs:label "maximum delay in seconds" ; rdfs:range xsd:integer .
 city:delayedShare a rdf:Property ; rdfs:label "share of delayed trip updates" ; rdfs:range xsd:double .
 city:urbanStressIndex a rdf:Property ; rdfs:label "urban stress index" ; rdfs:range xsd:double .
+city:airQualityStressComponent a rdf:Property ; rdfs:label "air quality stress component" ; rdfs:range xsd:double .
 city:heatStressComponent a rdf:Property ; rdfs:label "heat stress component" ; rdfs:range xsd:double .
 city:transitStressComponent a rdf:Property ; rdfs:label "transit stress component" ; rdfs:range xsd:double .
