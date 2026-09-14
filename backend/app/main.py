@@ -16,21 +16,27 @@ from app.repository import TwinRepository
 def create_app(
     data_directory: Path | None = None,
     graph_store_url: str | None = None,
+    sparql_endpoint_url: str | None = None,
 ) -> FastAPI:
-    """Create the API application for a file-backed or Graph-Store-backed state."""
+    """Create the API application for local, Graph Store, or SPARQL state access."""
     directory = data_directory or Path(os.getenv("TWIN_DATA_DIR", "data"))
     configured_store = graph_store_url
-    if configured_store is None and data_directory is None:
-        configured_store = os.getenv("TWIN_GRAPH_STORE_URL")
+    configured_sparql = sparql_endpoint_url
+    if data_directory is None:
+        if configured_sparql is None:
+            configured_sparql = os.getenv("TWIN_SPARQL_ENDPOINT_URL")
+        if configured_store is None and configured_sparql is None:
+            configured_store = os.getenv("TWIN_GRAPH_STORE_URL")
 
     repository = TwinRepository(
         directory,
+        sparql_endpoint_url=configured_sparql,
         graph_store_url=configured_store,
     )
 
     app = FastAPI(
         title="Berlin Urban Live Twin API",
-        version="0.4.0",
+        version="0.5.0",
         description="Query interface for the semantically integrated urban twin state.",
     )
     app.add_middleware(
@@ -52,7 +58,7 @@ def create_app(
         reload()
         return {
             "active_air_quality_stations": repository.active_station_count(),
-            "triple_count": len(repository.graph),
+            "triple_count": repository.triple_count(),
         }
 
     @app.get("/freshness")
