@@ -36,7 +36,7 @@ def create_app(
 
     app = FastAPI(
         title="Berlin Urban Live Twin API",
-        version="0.6.0",
+        version="0.7.0",
         description="Query interface for the semantically integrated urban twin state.",
     )
     app.add_middleware(
@@ -61,7 +61,7 @@ def create_app(
             reload()
             triple_count = repository.triple_count()
             freshness = assess_freshness(repository.latest_observation_timestamps())
-        except Exception as exc:  # boundary: dependency/network failures become readiness failures
+        except Exception as exc:
             raise HTTPException(
                 status_code=503,
                 detail={"status": "not_ready", "reason": "semantic_store_unavailable"},
@@ -91,6 +91,11 @@ def create_app(
     def freshness() -> dict[str, dict[str, Any]]:
         reload()
         return assess_freshness(repository.latest_observation_timestamps())
+
+    @app.get("/provenance")
+    def provenance() -> list[dict[str, Any]]:
+        reload()
+        return repository.provenance_summary()
 
     @app.get("/stations")
     def stations() -> list[dict[str, Any]]:
