@@ -30,8 +30,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    depends_on:
+      fuseki:
+        condition: service_healthy
     environment:
       TWIN_DATA_DIR: /data
+      TWIN_GRAPH_STORE_URL: http://fuseki:3030/twin/data?default
     volumes:
       - ./data:/data:ro
     ports:
