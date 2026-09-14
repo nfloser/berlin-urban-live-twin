@@ -11,10 +11,12 @@ RUN pip install --no-cache-dir \
     -r /tmp/air-quality-requirements.txt \
     -r /tmp/weather-requirements.txt \
     -r /tmp/transit-requirements.txt \
-    -r /tmp/analysis-requirements.txt
+    -r /tmp/analysis-requirements.txt \
+    "pyshacl>=0.30,<1.0"
 
 COPY agents ./agents
 COPY scripts ./scripts
+COPY ontology ./ontology
 
 ENV PYTHONUNBUFFERED=1
 
