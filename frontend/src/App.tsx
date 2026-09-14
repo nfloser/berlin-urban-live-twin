@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import MapView from "./MapView";
 import {
@@ -13,6 +13,7 @@ import {
   type UrbanStressState,
   type WeatherState,
 } from "./api";
+import { buildStationMapPoints } from "./mapModel";
 import "./styles.css";
 
 export default function App() {
@@ -42,6 +43,11 @@ export default function App() {
         setError(reason instanceof Error ? reason.message : "Unable to load urban twin state.");
       });
   }, []);
+
+  const stationMapPoints = useMemo(
+    () => buildStationMapPoints(stations, airQuality),
+    [stations, airQuality],
+  );
 
   return (
     <main className="shell">
@@ -99,7 +105,7 @@ export default function App() {
           <p className="eyebrow">Spatial context</p>
           <h2>Monitoring network</h2>
         </div>
-        <MapView stations={stations} />
+        <MapView stations={stationMapPoints} />
       </section>
     </main>
   );
