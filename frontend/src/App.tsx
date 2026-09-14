@@ -3,11 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import MapView from "./MapView";
 import {
   fetchAirQuality,
+  fetchFreshness,
   fetchStations,
   fetchTransit,
   fetchUrbanStress,
   fetchWeather,
   type AirQualityState,
+  type FreshnessState,
   type Station,
   type TransitState,
   type UrbanStressState,
@@ -22,6 +24,7 @@ export default function App() {
   const [weather, setWeather] = useState<WeatherState | null>(null);
   const [transit, setTransit] = useState<TransitState | null>(null);
   const [urbanStress, setUrbanStress] = useState<UrbanStressState | null>(null);
+  const [freshness, setFreshness] = useState<FreshnessState | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,13 +34,15 @@ export default function App() {
       fetchWeather(),
       fetchTransit(),
       fetchUrbanStress(),
+      fetchFreshness(),
     ])
-      .then(([stationData, airData, weatherData, transitData, stressData]) => {
+      .then(([stationData, airData, weatherData, transitData, stressData, freshnessData]) => {
         setStations(stationData);
         setAirQuality(airData);
         setWeather(weatherData);
         setTransit(transitData);
         setUrbanStress(stressData);
+        setFreshness(freshnessData);
       })
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : "Unable to load urban twin state.");
@@ -49,6 +54,19 @@ export default function App() {
     [stations, airQuality],
   );
 
+  const freshnessSummary = useMemo(() => {
+    if (!freshness) {
+      return "Checking source freshness…";
+    }
+    const entries = Object.values(freshness);
+    if (entries.every((entry) => entry.status === "fresh")) {
+      return "All sources fresh";
+    }
+    const stale = entries.filter((entry) => entry.status === "stale").length;
+    const missing = entries.filter((entry) => entry.status === "missing").length;
+    return `${stale} stale · ${missing} missing`;
+  }, [freshness]);
+
   return (
     <main className="shell">
       <header className="hero">
@@ -58,6 +76,7 @@ export default function App() {
           A continuously updated view of environmental and mobility conditions,
           integrated through a shared semantic representation.
         </p>
+        <p className="freshness-summary">{freshnessSummary}</p>
       </header>
 
       {error ? <p className="error">{error}</p> : null}
