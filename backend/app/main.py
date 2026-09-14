@@ -19,7 +19,7 @@ def create_app(data_directory: Path | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Berlin Urban Live Twin API",
-        version="0.1.0",
+        version="0.2.0",
         description="Query interface for the semantically integrated urban twin state.",
     )
     app.add_middleware(
@@ -49,6 +49,14 @@ def create_app(data_directory: Path | None = None) -> FastAPI:
         reload()
         return repository.active_stations()
 
+    @app.get("/air-quality")
+    def air_quality() -> dict[str, Any]:
+        reload()
+        observation = repository.latest_air_quality()
+        if observation is None:
+            raise HTTPException(status_code=404, detail="No air-quality index observation available")
+        return observation
+
     @app.get("/weather")
     def weather() -> dict[str, Any]:
         reload()
@@ -63,6 +71,14 @@ def create_app(data_directory: Path | None = None) -> FastAPI:
         observation = repository.latest_transit()
         if observation is None:
             raise HTTPException(status_code=404, detail="No transit observation available")
+        return observation
+
+    @app.get("/urban-stress")
+    def urban_stress() -> dict[str, Any]:
+        reload()
+        observation = repository.latest_urban_stress()
+        if observation is None:
+            raise HTTPException(status_code=404, detail="No urban-stress observation available")
         return observation
 
     @app.get("/graph", response_class=Response)
