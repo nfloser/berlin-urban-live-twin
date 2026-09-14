@@ -26,6 +26,12 @@ city:stationCategory a rdf:Property ; rdfs:label "station category" .
 city:observedAt a rdf:Property ; rdfs:label "observed at" ; rdfs:range xsd:dateTime .
 city:airQualityGrade a rdf:Property ; rdfs:label "Berlin air quality index grade" ; rdfs:range xsd:integer .
 city:observedAtStation a rdf:Property ; rdfs:label "observed at station" .
+city:lqiPM10 a rdf:Property ; rdfs:label "LQI grade for PM10" ; rdfs:range xsd:integer .
+city:lqiPM25 a rdf:Property ; rdfs:label "LQI grade for PM2.5" ; rdfs:range xsd:integer .
+city:lqiNO2 a rdf:Property ; rdfs:label "LQI grade for NO2" ; rdfs:range xsd:integer .
+city:lqiO3 a rdf:Property ; rdfs:label "LQI grade for O3" ; rdfs:range xsd:integer .
+city:lqiCO a rdf:Property ; rdfs:label "LQI grade for CO" ; rdfs:range xsd:integer .
+city:lqiSO2 a rdf:Property ; rdfs:label "LQI grade for SO2" ; rdfs:range xsd:integer .
 city:temperatureCelsius a rdf:Property ; rdfs:label "temperature in degrees Celsius" ; rdfs:range xsd:double .
 city:relativeHumidityPercent a rdf:Property ; rdfs:label "relative humidity percent" ; rdfs:range xsd:double .
 city:pressureHpa a rdf:Property ; rdfs:label "mean sea level pressure in hPa" ; rdfs:range xsd:double .
