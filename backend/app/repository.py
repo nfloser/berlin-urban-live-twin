@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -123,3 +124,27 @@ class TwinRepository:
             "heat_component": float(row[3]),
             "transit_component": float(row[4]),
         }
+
+    def latest_observation_timestamps(self) -> dict[str, datetime | None]:
+        """Return the latest timestamp for each live or derived observation class."""
+        classes = {
+            "air_quality": "AirQualityIndexObservation",
+            "weather": "WeatherObservation",
+            "transit": "TransitObservation",
+            "urban_stress": "UrbanStressObservation",
+        }
+        result: dict[str, datetime | None] = {}
+        for source, class_name in classes.items():
+            query = f"""
+            PREFIX city: <https://example.org/berlin/ontology/>
+            SELECT ?observedAt WHERE {{
+                ?observation a city:{class_name} ; city:observedAt ?observedAt .
+            }} ORDER BY DESC(?observedAt) LIMIT 1
+            """
+            row = next(iter(self.graph.query(query)), None)
+            result[source] = (
+                datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+                if row is not None
+                else None
+            )
+        return result
