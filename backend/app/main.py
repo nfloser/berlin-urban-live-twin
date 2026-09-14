@@ -36,7 +36,7 @@ def create_app(
 
     app = FastAPI(
         title="Berlin Urban Live Twin API",
-        version="0.7.0",
+        version="1.0.0",
         description="Query interface for the semantically integrated urban twin state.",
     )
     app.add_middleware(
