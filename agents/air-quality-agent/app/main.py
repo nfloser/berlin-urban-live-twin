@@ -1,13 +1,15 @@
-"""Entry point for the Berlin air quality data agent.
+"""Command-line entry point for the Berlin air-quality ingestion agent."""
 
-The initial project structure is intentionally minimal. Data ingestion logic
-will be added in subsequent development steps.
-"""
+from app.agent import AirQualityAgent
 
 
 def main() -> None:
-    """Run the air quality agent."""
-    print("Berlin air quality agent initialized.")
+    """Run one station-ingestion cycle and report its result."""
+    result = AirQualityAgent().refresh_stations()
+    print(
+        f"Air-quality station refresh completed: "
+        f"{result.ingested} ingested, {result.rejected} rejected."
+    )
 
 
 if __name__ == "__main__":
