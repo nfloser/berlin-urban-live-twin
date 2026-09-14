@@ -1,9 +1,11 @@
 """Tests for RDF conversion of air-quality domain objects."""
 
+from datetime import datetime
+
 from rdflib import RDF, XSD, Literal, URIRef
 
-from app.models import AirQualityStation
-from app.rdf_mapper import CITY, GEO, station_to_graph
+from app.models import AirQualityIndexObservation, AirQualityStation
+from app.rdf_mapper import CITY, GEO, lqi_to_graph, station_to_graph
 
 
 def test_station_to_graph_creates_semantic_station_representation() -> None:
@@ -25,3 +27,23 @@ def test_station_to_graph_creates_semantic_station_representation() -> None:
     assert (subject, GEO.lat, Literal(52.54291, datatype=XSD.double)) in graph
     assert (subject, GEO.long, Literal(13.34926, datatype=XSD.double)) in graph
     assert (subject, CITY.isActive, Literal(True, datatype=XSD.boolean)) in graph
+
+
+def test_lqi_to_graph_links_observation_to_station_and_components() -> None:
+    observation = AirQualityIndexObservation(
+        station_code="MC010",
+        observed_at=datetime.fromisoformat("2026-09-14T08:00:00+00:00"),
+        grade=3,
+        component_grades={"PM10": 2, "O3": 3},
+    )
+
+    graph = lqi_to_graph(observation)
+    subject = URIRef("https://example.org/berlin/lqi/MC010/20260914T080000Z")
+    station = URIRef("https://example.org/berlin/station/MC010")
+
+    assert (subject, RDF.type, CITY.AirQualityIndexObservation) in graph
+    assert (subject, CITY.observedAt, Literal("2026-09-14T08:00:00+00:00", datatype=XSD.dateTime)) in graph
+    assert (subject, CITY.airQualityGrade, Literal(3, datatype=XSD.integer)) in graph
+    assert (subject, CITY.observedAtStation, station) in graph
+    assert (subject, CITY.lqiPM10, Literal(2, datatype=XSD.integer)) in graph
+    assert (subject, CITY.lqiO3, Literal(3, datatype=XSD.integer)) in graph
