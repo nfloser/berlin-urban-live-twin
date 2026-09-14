@@ -16,6 +16,11 @@ FIXTURE = """
     city:stationCode "MC010" ; city:name "010 Wedding" ; city:isActive true ;
     geo:lat "52.54291"^^xsd:double ; geo:long "13.34926"^^xsd:double .
 
+<https://example.org/berlin/lqi/MC010/1> a city:AirQualityIndexObservation ;
+    city:observedAt "2026-09-14T08:00:00+00:00"^^xsd:dateTime ;
+    city:observedAtStation <https://example.org/berlin/station/MC010> ;
+    city:airQualityGrade 3 ; city:lqiPM10 2 ; city:lqiO3 3 .
+
 <https://example.org/berlin/weather/1> a city:WeatherObservation ;
     city:observedAt "2026-09-14T08:00:00+00:00"^^xsd:dateTime ;
     city:temperatureCelsius "18.2"^^xsd:double ;
@@ -25,6 +30,13 @@ FIXTURE = """
     city:observedAt "2026-09-14T08:00:00+00:00"^^xsd:dateTime ;
     city:totalTripUpdates 200 ; city:delayedTripUpdates 40 ;
     city:maxDelaySeconds 420 ; city:delayedShare "0.2"^^xsd:double .
+
+<https://example.org/berlin/derived/urban-stress/1> a city:UrbanStressObservation ;
+    city:observedAt "2026-09-14T08:00:00+00:00"^^xsd:dateTime ;
+    city:urbanStressIndex "31.0"^^xsd:double ;
+    city:airQualityStressComponent "0.4"^^xsd:double ;
+    city:heatStressComponent "0.0"^^xsd:double ;
+    city:transitStressComponent "0.4"^^xsd:double .
 """
 
 
@@ -39,6 +51,13 @@ def test_stations_endpoint_returns_map_ready_points(tmp_path: Path) -> None:
     assert response.json()[0]["code"] == "MC010"
 
 
+def test_air_quality_endpoint_returns_latest_official_lqi(tmp_path: Path) -> None:
+    response = client_with_fixture(tmp_path).get("/air-quality")
+    assert response.status_code == 200
+    assert response.json()["worst_grade"] == 3
+    assert response.json()["stations"][0]["station_code"] == "MC010"
+
+
 def test_weather_endpoint_returns_latest_weather(tmp_path: Path) -> None:
     response = client_with_fixture(tmp_path).get("/weather")
     assert response.status_code == 200
@@ -49,3 +68,10 @@ def test_transit_endpoint_returns_latest_realtime_summary(tmp_path: Path) -> Non
     response = client_with_fixture(tmp_path).get("/transit")
     assert response.status_code == 200
     assert response.json()["delayed_share"] == 0.2
+
+
+def test_urban_stress_endpoint_returns_latest_derived_observation(tmp_path: Path) -> None:
+    response = client_with_fixture(tmp_path).get("/urban-stress")
+    assert response.status_code == 200
+    assert response.json()["index"] == 31.0
+    assert response.json()["air_quality_component"] == 0.4
