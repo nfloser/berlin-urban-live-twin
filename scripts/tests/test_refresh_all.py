@@ -11,7 +11,12 @@ def test_refresh_all_runs_each_domain_agent_and_targets_shared_data_directory(tm
         refresh_all(repo_root=tmp_path)
 
     assert run.call_count == 3
-    commands = [call.args[0] for call in run.call_args_list]
-    assert any("air-quality-agent" in str(command) for command in commands)
-    assert any("weather-agent" in str(command) for command in commands)
-    assert any("transit-agent" in str(command) for command in commands)
+    working_directories = [Path(call.kwargs["cwd"]).name for call in run.call_args_list]
+    assert working_directories == ["air-quality-agent", "weather-agent", "transit-agent"]
+
+    output_arguments = [call.args[0][-1] for call in run.call_args_list]
+    assert output_arguments == [
+        str(tmp_path / "data" / "air-quality.ttl"),
+        str(tmp_path / "data" / "weather.ttl"),
+        str(tmp_path / "data" / "transit.ttl"),
+    ]
