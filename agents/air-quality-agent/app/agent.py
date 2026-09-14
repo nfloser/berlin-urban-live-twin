@@ -1,4 +1,4 @@
-"""Application service for ingesting Berlin air-quality station data."""
+"""Application service for ingesting Berlin air-quality station and LQI data."""
 
 from __future__ import annotations
 
@@ -6,7 +6,8 @@ from dataclasses import dataclass
 
 from app.berlin_api import BerlinAirQualityClient
 from app.knowledge_graph import LocalKnowledgeGraph
-from app.rdf_mapper import station_to_graph
+from app.lqi_mapper import extract_lqi_records, map_lqi_observation
+from app.rdf_mapper import lqi_to_graph, station_to_graph
 from app.station_mapper import map_station
 
 
@@ -19,7 +20,7 @@ class IngestionResult:
 
 
 class AirQualityAgent:
-    """Retrieve station data, normalise it, and update the knowledge graph."""
+    """Retrieve Berlin air-quality data, normalise it, and update the graph."""
 
     def __init__(
         self,
@@ -42,6 +43,28 @@ class AirQualityAgent:
                 continue
 
             self.knowledge_graph.merge(station_to_graph(station))
+            ingested += 1
+
+        return IngestionResult(ingested=ingested, rejected=rejected)
+
+    def refresh_lqi(self) -> IngestionResult:
+        """Fetch current official Berlin LQI records and merge valid observations."""
+        ingested = 0
+        rejected = 0
+
+        try:
+            records = extract_lqi_records(self._client.get_lqi_data())
+        except (TypeError, ValueError):
+            return IngestionResult(ingested=0, rejected=1)
+
+        for payload in records:
+            try:
+                observation = map_lqi_observation(payload)
+            except (TypeError, ValueError):
+                rejected += 1
+                continue
+
+            self.knowledge_graph.merge(lqi_to_graph(observation))
             ingested += 1
 
         return IngestionResult(ingested=ingested, rejected=rejected)
