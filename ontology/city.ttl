@@ -1,0 +1,32 @@
+@prefix city: <https://example.org/berlin/ontology/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+city:AirQualityStation a rdfs:Class ;
+    rdfs:label "Air quality station" .
+
+city:WeatherObservation a rdfs:Class ;
+    rdfs:label "Weather observation" .
+
+city:TransitObservation a rdfs:Class ;
+    rdfs:label "Transit observation" .
+
+city:UrbanStressObservation a rdfs:Class ;
+    rdfs:label "Urban stress observation" .
+
+city:stationCode a rdf:Property ;
+    rdfs:label "station code" .
+
+city:name a rdf:Property ;
+    rdfs:label "name" .
+
+city:address a rdf:Property ;
+    rdfs:label "address" .
+
+city:isActive a rdf:Property ;
+    rdfs:label "is active" ;
+    rdfs:range xsd:boolean .
+
+city:stationCategory a rdf:Property ;
+    rdfs:label "station category" .
