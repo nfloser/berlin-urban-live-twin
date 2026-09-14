@@ -34,7 +34,7 @@ class TwinRepository:
         }
         """
         row = next(iter(self.graph.query(query)), None)
-        return int(row.count) if row is not None else 0
+        return int(row[0]) if row is not None else 0
 
     def active_stations(self) -> list[dict[str, Any]]:
         """Return active stations in a map-friendly representation."""
