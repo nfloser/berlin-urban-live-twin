@@ -191,6 +191,12 @@ jobs:
 
           provenance = get('/provenance')
           assert any(item['source'] == 'https://production.gtfsrt.vbb.de/data' for item in provenance), provenance
+
+          with urlopen('http://localhost:8000/graph', timeout=10) as response:
+              turtle = response.read().decode('utf-8')
+              content_type = response.headers.get_content_type()
+          assert content_type == 'text/turtle', content_type
+          assert 'AirQualityStation' in turtle, turtle[:500]
           PY
 
       - name: Stop integration stack
