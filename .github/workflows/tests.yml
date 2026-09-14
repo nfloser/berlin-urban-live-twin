@@ -1,0 +1,55 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Test air quality agent
+        working-directory: agents/air-quality-agent
+        run: |
+          python -m pip install -r requirements-dev.txt
+          PYTHONPATH=. pytest -q
+
+      - name: Test weather agent
+        working-directory: agents/weather-agent
+        run: |
+          python -m pip install -r requirements-dev.txt
+          PYTHONPATH=. pytest -q
+
+      - name: Test transit agent
+        working-directory: agents/transit-agent
+        run: |
+          python -m pip install -r requirements-dev.txt
+          PYTHONPATH=. pytest -q
+
+      - name: Test analysis agent
+        working-directory: agents/analysis-agent
+        run: |
+          python -m pip install -r requirements-dev.txt
+          PYTHONPATH=. pytest -q
+
+      - name: Test backend
+        working-directory: backend
+        run: |
+          python -m pip install -r requirements-dev.txt
+          PYTHONPATH=. pytest -q
+
+      - name: Test orchestration scripts
+        run: |
+          python -m pip install "pytest>=8,<9"
+          PYTHONPATH=. pytest -q scripts/tests
