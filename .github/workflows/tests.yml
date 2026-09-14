@@ -92,3 +92,69 @@ jobs:
 
       - name: Build service images
         run: docker compose build
+
+      - name: Start persistent graph store
+        run: |
+          docker compose up -d fuseki
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent 'http://localhost:3030/$/ping' >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs fuseki
+          exit 1
+
+      - name: Seed deterministic integration graph
+        run: |
+          python - <<'PY'
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          now = datetime.now(timezone.utc).isoformat()
+          Path('/tmp/twin-ci.ttl').write_text(f'''@prefix city: <https://example.org/berlin/ontology/> .
+          @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+          <https://example.org/station/CI001> a city:AirQualityStation ; city:stationCode "CI001" ; city:isActive true .
+          <https://example.org/air/ci> a city:AirQualityIndexObservation ; city:observedAt "{now}"^^xsd:dateTime .
+          <https://example.org/weather/ci> a city:WeatherObservation ; city:observedAt "{now}"^^xsd:dateTime .
+          <https://example.org/transit/ci> a city:TransitObservation ; city:observedAt "{now}"^^xsd:dateTime .
+          <https://example.org/stress/ci> a city:UrbanStressObservation ; city:observedAt "{now}"^^xsd:dateTime .
+          ''', encoding='utf-8')
+          PY
+          curl --fail --silent --show-error \
+            --request PUT \
+            --header 'Content-Type: text/turtle' \
+            --data-binary @/tmp/twin-ci.ttl \
+            'http://localhost:3030/twin/data?default'
+
+      - name: Start backend against Fuseki
+        run: |
+          docker compose up -d backend
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://localhost:8000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs backend
+          exit 1
+
+      - name: Verify Graph Store to API integration
+        run: |
+          python - <<'PY'
+          import json
+          from urllib.request import urlopen
+
+          with urlopen('http://localhost:8000/state', timeout=5) as response:
+              state = json.load(response)
+          assert state['active_air_quality_stations'] == 1, state
+          assert state['triple_count'] >= 9, state
+
+          with urlopen('http://localhost:8000/freshness', timeout=5) as response:
+              freshness = json.load(response)
+          assert all(item['status'] == 'fresh' for item in freshness.values()), freshness
+          PY
+
+      - name: Stop integration stack
+        if: always()
+        run: docker compose down --volumes
