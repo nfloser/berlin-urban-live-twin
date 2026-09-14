@@ -1,4 +1,4 @@
-"""Run all ingestion agents and derive the shared urban-twin state."""
+"""Run all ingestion agents, derive state, and optionally publish it."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+from scripts.publish_graph import publish_graph
 
 
 AGENTS = (
@@ -21,8 +23,11 @@ def _run(command: list[str], cwd: Path) -> None:
     subprocess.run(command, cwd=cwd, env=environment, check=True)
 
 
-def refresh_all(repo_root: Path | None = None) -> None:
-    """Refresh source domains first, then derive cross-domain information."""
+def refresh_all(
+    repo_root: Path | None = None,
+    graph_store_url: str | None = None,
+) -> int | None:
+    """Refresh sources, derive information, then publish the integrated graph if configured."""
     root = repo_root or Path(__file__).resolve().parents[1]
     data_dir = root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -53,6 +58,13 @@ def refresh_all(repo_root: Path | None = None) -> None:
         cwd=root / "agents" / "analysis-agent",
     )
 
+    target = graph_store_url or os.getenv("TWIN_GRAPH_STORE_URL")
+    if target:
+        return publish_graph(data_dir, target)
+    return None
+
 
 if __name__ == "__main__":
-    refresh_all()
+    published = refresh_all()
+    if published is not None:
+        print(f"SPARQL store publication completed: {published} triples")
