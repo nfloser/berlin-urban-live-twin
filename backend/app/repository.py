@@ -6,20 +6,39 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import requests
 from rdflib import Graph
 
 
 class TwinRepository:
-    """Load and query Turtle files produced by domain agents."""
+    """Load and query the semantic twin state from Graph Store or Turtle files."""
 
-    def __init__(self, data_directory: Path) -> None:
+    def __init__(
+        self,
+        data_directory: Path,
+        *,
+        graph_store_url: str | None = None,
+        session: requests.Session | None = None,
+        timeout: int = 10,
+    ) -> None:
         self._data_directory = data_directory
+        self._graph_store_url = graph_store_url
+        self._session = session or requests.Session()
+        self._timeout = timeout
         self.graph = Graph()
 
     def reload(self) -> None:
-        """Rebuild the in-memory graph from all Turtle files in the data directory."""
+        """Rebuild the in-memory graph from the configured semantic-state source."""
         graph = Graph()
-        if self._data_directory.exists():
+        if self._graph_store_url:
+            response = self._session.get(
+                self._graph_store_url,
+                headers={"Accept": "text/turtle"},
+                timeout=self._timeout,
+            )
+            response.raise_for_status()
+            graph.parse(data=response.text, format="turtle")
+        elif self._data_directory.exists():
             for path in sorted(self._data_directory.glob("*.ttl")):
                 graph.parse(path, format="turtle")
         self.graph = graph
