@@ -22,23 +22,26 @@ RDF mapping
         v
 Shared semantic state
         |
-   +----+------------------+
-   |                       |
-   v                       v
-SPARQL query layer   Derived-information modules
-   |
-   v
-FastAPI backend
-   |
-   v
-React / MapLibre presentation
+   +----+--------------------+
+   |                         |
+   v                         v
+SPARQL query layer      Analysis agent
+   |                         |
+   |                   derived RDF
+   +-----------+-------------+
+               |
+               v
+         FastAPI backend
+               |
+               v
+     React / MapLibre presentation
 ```
 
 ## Current domain agents
 
 ### Air quality
 
-The air-quality agent retrieves metadata for Berlin monitoring stations, maps the source payload into an `AirQualityStation` domain model, and produces RDF containing station identity, location, activity state, address, and station category. The agent currently models station metadata only; live pollutant measurements and the Berlin air-quality index are a separate upcoming increment.
+The air-quality agent retrieves active Berlin monitoring stations and the official hourly Berlin Luftqualitätsindex (LQI). Source payloads are mapped into explicit `AirQualityStation` and `AirQualityIndexObservation` models. RDF separates relatively stable station identity/location from time-dependent LQI observations and links each observation back to its station.
 
 ### Weather
 
@@ -52,21 +55,37 @@ The transit agent consumes the official VBB GTFS-Realtime protocol-buffer feed. 
 
 During the current prototype stage, domain agents serialize their RDF output as Turtle files into a shared `data/` directory. The backend reconstructs the integrated graph using RDFLib and queries that graph through SPARQL.
 
-This file-backed state is an intermediate architectural choice. It provides persistence and a clean semantic integration boundary without introducing operational complexity prematurely. A persistent triple store is planned once the ontology, query patterns, and agent boundaries have stabilised.
+This file-backed state is an intermediate architectural choice. It keeps the semantic model inspectable and version-independent while the ontology and agent contracts are still evolving. A persistent SPARQL/triple-store service is the next infrastructure evolution once the existing file-backed behaviour is preserved by integration tests.
 
 The backend currently exposes:
 
 - active monitoring stations suitable for spatial presentation;
+- current official station-level Berlin LQI observations;
 - the latest weather observation;
 - the latest aggregated transit observation;
+- the latest derived Urban Stress observation;
+- source freshness metadata;
 - summary information about the integrated graph; and
 - the complete current RDF graph in Turtle format.
 
 ## Derived information
 
-The analysis agent contains an experimental Urban Stress Index that combines normalised air-quality, heat, and transit-delay components. Its calculation is intentionally transparent and deterministic rather than predictive.
+The analysis agent calculates an experimental Urban Stress Index from three semantically integrated observations: worst current Berlin LQI grade, latest temperature, and latest VBB delayed-trip share.
 
-The calculation and RDF representation are covered by tests, but the module is not yet connected to the live refresh pipeline. This is intentional: live air-quality-index measurements must first be represented in the shared graph so that the analysis can consume semantically integrated source observations rather than manually supplied values.
+The calculation is transparent and deterministic rather than predictive. Before deriving a value, the agent checks temporal consistency: the latest source observations may be at most two hours apart. Otherwise no derived observation is emitted. The resulting component values and index are themselves represented in RDF and therefore become queryable semantic state.
+
+## Freshness model
+
+Temporal consistency between inputs and absolute freshness are treated as different concerns.
+
+The backend currently assesses absolute freshness using explicit prototype thresholds:
+
+- air quality: 2 hours;
+- weather: 2 hours;
+- transit: 15 minutes;
+- derived urban stress: 2 hours.
+
+Each domain is reported as `fresh`, `stale`, or `missing` through `GET /freshness`. This prevents the presentation layer from implying that any persisted observation is automatically live merely because it exists.
 
 ## Runtime architecture
 
@@ -78,9 +97,15 @@ The calculation and RDF representation are covered by tests, but the module is n
         v                           v
   refresh service              backend service
         |                           |
-        | writes RDF                | reads RDF
+        | source RDF                | reads/query RDF
         v                           v
       data/ <---------------- shared volume
+        |
+        v
+  analysis agent
+        |
+        v
+ urban-stress.ttl
                                     |
                                     v
                               FastAPI :8000
@@ -89,17 +114,18 @@ The calculation and RDF representation are covered by tests, but the module is n
                               frontend :8080
 ```
 
-The refresh service executes the domain agents sequentially. The backend mounts the generated RDF state read-only. The frontend communicates only with the backend and therefore has no knowledge of the original external APIs.
+The refresh service executes air quality, weather, and transit ingestion before running the analysis agent over those persisted domain outputs. The backend mounts the generated semantic state read-only. The frontend communicates only with the backend and therefore has no knowledge of the original external APIs.
 
 ## Design principles
 
 1. **External schemas remain at the boundary.** JSON and GTFS-Realtime structures are converted into explicit internal models before semantic conversion.
 2. **Semantic representation is a first-class concern.** RDF is produced from validated domain objects rather than arbitrary external payloads.
 3. **Presentation is decoupled from ingestion.** The frontend consumes a stable backend interface rather than external city APIs.
-4. **Derived information should be reproducible.** Analytical outputs are deterministic and can be represented as RDF together with their component values.
-5. **Infrastructure is introduced progressively.** The prototype uses RDFLib and Turtle before a persistent triple store is justified.
-6. **Development is test-driven where practical.** Behavioural changes are specified by automated tests before implementation.
-7. **Domain agents remain independently testable.** Each agent owns its models, mappings, dependencies, and tests.
+4. **Derived information is reproducible.** Analytical outputs are deterministic, time-checked, and represented as RDF together with their component values.
+5. **Freshness is explicit.** Persisted data is not automatically treated as live; age and source-specific thresholds are observable.
+6. **Infrastructure is introduced progressively.** RDFLib/Turtle establishes behaviour before migration to a persistent triple store.
+7. **Development is test-driven where practical.** Behavioural changes are specified by automated tests before implementation.
+8. **Domain agents remain independently testable.** Each agent owns its models, mappings, dependencies, and tests.
 
 ## Relationship to The World Avatar
 
