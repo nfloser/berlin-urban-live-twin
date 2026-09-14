@@ -33,3 +33,20 @@ def test_refresh_all_runs_domain_agents_then_analysis_agent(tmp_path: Path) -> N
         "--output",
         str(tmp_path / "data" / "urban-stress.ttl"),
     ]
+
+
+def test_refresh_all_publishes_integrated_graph_when_store_url_is_configured(tmp_path: Path) -> None:
+    with (
+        patch("scripts.refresh_all.subprocess.run"),
+        patch("scripts.refresh_all.publish_graph", return_value=42) as publish,
+    ):
+        result = refresh_all(
+            repo_root=tmp_path,
+            graph_store_url="http://fuseki:3030/twin/data?default",
+        )
+
+    publish.assert_called_once_with(
+        tmp_path / "data",
+        "http://fuseki:3030/twin/data?default",
+    )
+    assert result == 42
