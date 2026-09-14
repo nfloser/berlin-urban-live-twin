@@ -8,6 +8,7 @@ from app.repository import TwinRepository
 FIXTURE = """
 @prefix city: <https://example.org/berlin/ontology/> .
 @prefix geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 <https://example.org/berlin/station/MC010> a city:AirQualityStation ;
@@ -20,14 +21,16 @@ FIXTURE = """
 <https://example.org/berlin/weather/2026-09-14T08:00:00+00:00> a city:WeatherObservation ;
     city:observedAt "2026-09-14T08:00:00+00:00"^^xsd:dateTime ;
     city:temperatureCelsius "18.2"^^xsd:double ;
-    city:relativeHumidityPercent "63.0"^^xsd:double .
+    city:relativeHumidityPercent "63.0"^^xsd:double ;
+    prov:wasDerivedFrom <https://api.brightsky.dev/current_weather> .
 
 <https://example.org/berlin/transit/2026-09-14T08:00:00+00:00> a city:TransitObservation ;
     city:observedAt "2026-09-14T08:00:00+00:00"^^xsd:dateTime ;
     city:totalTripUpdates 200 ;
     city:delayedTripUpdates 40 ;
     city:maxDelaySeconds 420 ;
-    city:delayedShare "0.2"^^xsd:double .
+    city:delayedShare "0.2"^^xsd:double ;
+    prov:wasDerivedFrom <https://production.gtfsrt.vbb.de/data> .
 """
 
 
@@ -75,3 +78,20 @@ def test_latest_transit_returns_realtime_summary(tmp_path: Path) -> None:
         "max_delay_seconds": 420,
         "delayed_share": 0.2,
     }
+
+
+def test_provenance_summary_returns_source_lineage(tmp_path: Path) -> None:
+    repository = repository_with_fixture(tmp_path)
+
+    assert repository.provenance_summary() == [
+        {
+            "observation_type": "TransitObservation",
+            "source": "https://production.gtfsrt.vbb.de/data",
+            "count": 1,
+        },
+        {
+            "observation_type": "WeatherObservation",
+            "source": "https://api.brightsky.dev/current_weather",
+            "count": 1,
+        },
+    ]
