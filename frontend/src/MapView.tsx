@@ -2,10 +2,18 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import type { Station } from "./api";
+import type { StationMapPoint } from "./mapModel";
 
 interface MapViewProps {
-  stations: Station[];
+  stations: StationMapPoint[];
+}
+
+function componentText(components: Record<string, number>): string {
+  const entries = Object.entries(components);
+  if (entries.length === 0) {
+    return "No pollutant sub-indices available";
+  }
+  return entries.map(([name, grade]) => `${name}: ${grade}`).join(" · ");
 }
 
 export default function MapView({ stations }: MapViewProps) {
@@ -36,16 +44,20 @@ export default function MapView({ stations }: MapViewProps) {
 
     map.addControl(new maplibregl.NavigationControl(), "top-right");
 
-    const markers = stations.map((station) =>
-      new maplibregl.Marker()
+    const markers = stations.map((station) => {
+      const lqiText = station.lqiGrade == null
+        ? "No current LQI"
+        : `LQI ${station.lqiGrade} — ${station.lqiLabel}`;
+
+      return new maplibregl.Marker()
         .setLngLat([station.longitude, station.latitude])
         .setPopup(
           new maplibregl.Popup({ offset: 18 }).setHTML(
-            `<strong>${station.name}</strong><br/>Station ${station.code}`,
+            `<strong>${station.name}</strong><br/>Station ${station.code}<br/>${lqiText}<br/><small>${componentText(station.components)}</small>`,
           ),
         )
-        .addTo(map),
-    );
+        .addTo(map);
+    });
 
     return () => {
       markers.forEach((marker) => marker.remove());
@@ -53,5 +65,5 @@ export default function MapView({ stations }: MapViewProps) {
     };
   }, [stations]);
 
-  return <div ref={containerRef} className="map" aria-label="Map of Berlin air-quality stations" />;
+  return <div ref={containerRef} className="map" aria-label="Map of Berlin air-quality stations with current LQI" />;
 }
