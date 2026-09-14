@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.repository import TwinRepository
 
@@ -20,6 +21,12 @@ def create_app(data_directory: Path | None = None) -> FastAPI:
         title="Berlin Urban Live Twin API",
         version="0.1.0",
         description="Query interface for the semantically integrated urban twin state.",
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://localhost:8080"],
+        allow_methods=["GET"],
+        allow_headers=["*"],
     )
 
     def reload() -> None:
