@@ -107,13 +107,19 @@ class TwinRepository:
     def latest_urban_stress(self) -> dict[str, Any] | None:
         query = """
         PREFIX city: <https://example.org/berlin/ontology/>
-        SELECT ?observedAt ?index ?air ?heat ?transit WHERE {
+        SELECT ?observedAt ?stressIndex ?air ?heat ?transit WHERE {
             ?observation a city:UrbanStressObservation ; city:observedAt ?observedAt ;
-                         city:urbanStressIndex ?index ; city:airQualityStressComponent ?air ;
+                         city:urbanStressIndex ?stressIndex ; city:airQualityStressComponent ?air ;
                          city:heatStressComponent ?heat ; city:transitStressComponent ?transit .
         } ORDER BY DESC(?observedAt) LIMIT 1
         """
         row = next(iter(self.graph.query(query)), None)
         if row is None:
             return None
-        return {"observed_at": str(row.observedAt), "index": float(row.index), "air_quality_component": float(row.air), "heat_component": float(row.heat), "transit_component": float(row.transit)}
+        return {
+            "observed_at": str(row[0]),
+            "index": float(row[1]),
+            "air_quality_component": float(row[2]),
+            "heat_component": float(row[3]),
+            "transit_component": float(row[4]),
+        }
