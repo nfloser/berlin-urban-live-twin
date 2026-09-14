@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.freshness import assess_freshness
 from app.repository import TwinRepository
 
 
@@ -19,7 +20,7 @@ def create_app(data_directory: Path | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Berlin Urban Live Twin API",
-        version="0.2.0",
+        version="0.3.0",
         description="Query interface for the semantically integrated urban twin state.",
     )
     app.add_middleware(
@@ -43,6 +44,11 @@ def create_app(data_directory: Path | None = None) -> FastAPI:
             "active_air_quality_stations": repository.active_station_count(),
             "triple_count": len(repository.graph),
         }
+
+    @app.get("/freshness")
+    def freshness() -> dict[str, dict[str, Any]]:
+        reload()
+        return assess_freshness(repository.latest_observation_timestamps())
 
     @app.get("/stations")
     def stations() -> list[dict[str, Any]]:
