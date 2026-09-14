@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, HTTPException, Response
 
 from app.repository import TwinRepository
 
@@ -21,21 +22,45 @@ def create_app(data_directory: Path | None = None) -> FastAPI:
         description="Query interface for the semantically integrated urban twin state.",
     )
 
+    def reload() -> None:
+        repository.reload()
+
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
     @app.get("/state")
     def state() -> dict[str, int]:
-        repository.reload()
+        reload()
         return {
             "active_air_quality_stations": repository.active_station_count(),
             "triple_count": len(repository.graph),
         }
 
+    @app.get("/stations")
+    def stations() -> list[dict[str, Any]]:
+        reload()
+        return repository.active_stations()
+
+    @app.get("/weather")
+    def weather() -> dict[str, Any]:
+        reload()
+        observation = repository.latest_weather()
+        if observation is None:
+            raise HTTPException(status_code=404, detail="No weather observation available")
+        return observation
+
+    @app.get("/transit")
+    def transit() -> dict[str, Any]:
+        reload()
+        observation = repository.latest_transit()
+        if observation is None:
+            raise HTTPException(status_code=404, detail="No transit observation available")
+        return observation
+
     @app.get("/graph", response_class=Response)
     def graph() -> Response:
-        repository.reload()
+        reload()
         turtle = repository.graph.serialize(format="turtle")
         return Response(content=turtle, media_type="text/turtle")
 
