@@ -1,1 +1,1 @@
-# Runtime dependencies will be added when the first external data source is integrated.
+requests>=2.32,<3.0
