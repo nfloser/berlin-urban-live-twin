@@ -20,21 +20,22 @@ Domain models
 RDF mapping
         |
         v
-Shared semantic state
+Turtle domain exports
         |
-   +----+--------------------+
-   |                         |
-   v                         v
-SPARQL query layer      Analysis agent
-   |                         |
-   |                   derived RDF
-   +-----------+-------------+
-               |
-               v
-         FastAPI backend
-               |
-               v
-     React / MapLibre presentation
+        v
+Derived-information agent
+        |
+        v
+Integrated RDF publication
+        |
+        v
+Apache Jena Fuseki / TDB2
+        |
+        v
+FastAPI query layer
+        |
+        v
+React / MapLibre presentation
 ```
 
 ## Current domain agents
@@ -51,11 +52,18 @@ The weather agent retrieves a current observation for Berlin through Bright Sky,
 
 The transit agent consumes the official VBB GTFS-Realtime protocol-buffer feed. It derives an aggregated `TransitSnapshot` containing the number of trip updates, the number and share of delayed trips, and maximum observed delay before producing RDF. Aggregation is deliberately performed inside the domain boundary rather than in the frontend.
 
-## Semantic state and query layer
+## Semantic persistence and query layer
 
-During the current prototype stage, domain agents serialize their RDF output as Turtle files into a shared `data/` directory. The backend reconstructs the integrated graph using RDFLib and queries that graph through SPARQL.
+Each source agent still serializes its current RDF output as Turtle into `data/`. These files are intentionally retained because they make agent output easy to inspect, test and debug independently.
 
-This file-backed state is an intermediate architectural choice. It keeps the semantic model inspectable and version-independent while the ontology and agent contracts are still evolving. A persistent SPARQL/triple-store service is the next infrastructure evolution once the existing file-backed behaviour is preserved by integration tests.
+After source refresh and derived analysis, the orchestration layer merges the current Turtle outputs and publishes the integrated graph through the SPARQL Graph Store Protocol. The Docker runtime uses Apache Jena Fuseki 6.2.0 with a persistent TDB2 dataset named `/twin`. The TDB database is stored in the `fuseki-data` Docker volume.
+
+The backend repository supports two state sources:
+
+1. **Graph Store mode** — used by the Docker runtime. The integrated graph is retrieved from Fuseki and queried with the established RDFLib/SPARQL query layer.
+2. **File-backed mode** — used by deterministic tests and lightweight local development when `TWIN_GRAPH_STORE_URL` is not configured.
+
+This staged migration preserves the existing query behaviour while moving persistence out of flat files. A future optimisation can execute SPARQL queries directly against Fuseki instead of transferring the current default graph into RDFLib for each backend reload.
 
 The backend currently exposes:
 
@@ -90,31 +98,46 @@ Each domain is reported as `fresh`, `stale`, or `missing` through `GET /freshnes
 ## Runtime architecture
 
 ```text
-                 docker compose
-                      |
-        +-------------+-------------+
-        |                           |
-        v                           v
-  refresh service              backend service
-        |                           |
-        | source RDF                | reads/query RDF
-        v                           v
-      data/ <---------------- shared volume
-        |
-        v
-  analysis agent
-        |
-        v
- urban-stress.ttl
-                                    |
-                                    v
-                              FastAPI :8000
-                                    |
-                                    v
-                              frontend :8080
+                         docker compose
+                               |
+             +-----------------+------------------+
+             |                                    |
+             v                                    v
+       refresh service                      Fuseki service
+             |                                    |
+ source APIs -> RDF exports                       | TDB2 volume
+             |                                    |
+             v                                    |
+       analysis agent                             |
+             |                                    |
+             v                                    |
+     integrated RDF -- Graph Store PUT ---------->|
+                                                  |
+                                                  v
+                                           persistent /twin
+                                                  |
+                                                  v
+                                           backend service
+                                                  |
+                                                  v
+                                            FastAPI :8000
+                                                  |
+                                                  v
+                                           frontend :8080
 ```
 
-The refresh service executes air quality, weather, and transit ingestion before running the analysis agent over those persisted domain outputs. The backend mounts the generated semantic state read-only. The frontend communicates only with the backend and therefore has no knowledge of the original external APIs.
+The frontend communicates only with the backend and therefore has no knowledge of the original external APIs or storage technology.
+
+## Validation strategy
+
+The persistent-store integration is covered at several levels:
+
+- unit tests for Graph Store publication;
+- repository tests for remote Graph Store loading;
+- Docker image and Compose validation;
+- an end-to-end CI check that starts Fuseki, seeds RDF through Graph Store HTTP, starts the backend, and verifies API state and freshness through the real container network.
+
+This keeps infrastructure changes subject to the same test-driven contract as application code.
 
 ## Design principles
 
@@ -123,10 +146,11 @@ The refresh service executes air quality, weather, and transit ingestion before 
 3. **Presentation is decoupled from ingestion.** The frontend consumes a stable backend interface rather than external city APIs.
 4. **Derived information is reproducible.** Analytical outputs are deterministic, time-checked, and represented as RDF together with their component values.
 5. **Freshness is explicit.** Persisted data is not automatically treated as live; age and source-specific thresholds are observable.
-6. **Infrastructure is introduced progressively.** RDFLib/Turtle establishes behaviour before migration to a persistent triple store.
-7. **Development is test-driven where practical.** Behavioural changes are specified by automated tests before implementation.
-8. **Domain agents remain independently testable.** Each agent owns its models, mappings, dependencies, and tests.
+6. **Persistence is standards-based.** The integrated graph is published through standard Graph Store HTTP and served by a SPARQL-capable TDB2 store.
+7. **Infrastructure is introduced progressively.** Inspectable Turtle exports remain available while persistent semantic storage is introduced behind a tested repository boundary.
+8. **Development is test-driven where practical.** Behavioural changes are specified by automated tests before implementation.
+9. **Domain agents remain independently testable.** Each agent owns its models, mappings, dependencies, and tests.
 
 ## Relationship to The World Avatar
 
-The project is inspired by architectural concepts used by The World Avatar: domain-oriented agents, semantic interoperability, knowledge graphs, SPARQL-based access, and derived information. It is an independent implementation for learning and experimentation rather than a copy of The World Avatar codebase.
+The project is inspired by architectural concepts used by The World Avatar: domain-oriented agents, semantic interoperability, knowledge graphs, SPARQL-based access, persistent semantic storage, and derived information. It is an independent implementation for learning and experimentation rather than a copy of The World Avatar codebase.
