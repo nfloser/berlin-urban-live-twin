@@ -1,4 +1,4 @@
-"""Run all ingestion agents, derive state, and optionally publish it."""
+"""Run all ingestion agents, derive state, validate it, and optionally publish it."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from scripts.publish_graph import publish_graph
+from scripts.validate_graph import validate_integrated_graph
 
 
 AGENTS = (
@@ -27,7 +28,7 @@ def refresh_all(
     repo_root: Path | None = None,
     graph_store_url: str | None = None,
 ) -> int | None:
-    """Refresh sources, derive information, then publish the integrated graph if configured."""
+    """Refresh sources, derive information, validate RDF, then publish if configured."""
     root = repo_root or Path(__file__).resolve().parents[1]
     data_dir = root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -35,13 +36,7 @@ def refresh_all(
     for agent_name, output_name in AGENTS:
         agent_dir = root / "agents" / agent_name
         _run(
-            [
-                sys.executable,
-                "-m",
-                "app.main",
-                "--output",
-                str(data_dir / output_name),
-            ],
+            [sys.executable, "-m", "app.main", "--output", str(data_dir / output_name)],
             cwd=agent_dir,
         )
 
@@ -57,6 +52,8 @@ def refresh_all(
         ],
         cwd=root / "agents" / "analysis-agent",
     )
+
+    validate_integrated_graph(data_dir, root / "ontology" / "shapes.ttl")
 
     target = graph_store_url or os.getenv("TWIN_GRAPH_STORE_URL")
     if target:
