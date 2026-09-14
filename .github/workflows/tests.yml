@@ -113,12 +113,30 @@ jobs:
 
           now = datetime.now(timezone.utc).isoformat()
           Path('/tmp/twin-ci.ttl').write_text(f'''@prefix city: <https://example.org/berlin/ontology/> .
+          @prefix geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+          @prefix prov: <http://www.w3.org/ns/prov#> .
           @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
-          <https://example.org/station/CI001> a city:AirQualityStation ; city:stationCode "CI001" ; city:isActive true .
-          <https://example.org/air/ci> a city:AirQualityIndexObservation ; city:observedAt "{now}"^^xsd:dateTime .
-          <https://example.org/weather/ci> a city:WeatherObservation ; city:observedAt "{now}"^^xsd:dateTime .
-          <https://example.org/transit/ci> a city:TransitObservation ; city:observedAt "{now}"^^xsd:dateTime .
-          <https://example.org/stress/ci> a city:UrbanStressObservation ; city:observedAt "{now}"^^xsd:dateTime .
+          <https://example.org/station/CI001> a city:AirQualityStation ;
+              city:stationCode "CI001" ; city:name "CI Station" ; city:isActive true ;
+              geo:lat "52.52"^^xsd:double ; geo:long "13.405"^^xsd:double .
+          <https://example.org/air/ci> a city:AirQualityIndexObservation ;
+              city:observedAt "{now}"^^xsd:dateTime ; city:airQualityGrade 2 ;
+              city:observedAtStation <https://example.org/station/CI001> ;
+              city:lqiO3 2 ; prov:wasDerivedFrom <https://luftdaten.berlin.de/api/lqis/data> .
+          <https://example.org/weather/ci> a city:WeatherObservation ;
+              city:observedAt "{now}"^^xsd:dateTime ; city:temperatureCelsius "18.2"^^xsd:double ;
+              city:relativeHumidityPercent "63.0"^^xsd:double ;
+              prov:wasDerivedFrom <https://api.brightsky.dev/current_weather> .
+          <https://example.org/transit/ci> a city:TransitObservation ;
+              city:observedAt "{now}"^^xsd:dateTime ; city:totalTripUpdates 200 ;
+              city:delayedTripUpdates 40 ; city:maxDelaySeconds 420 ; city:delayedShare "0.2"^^xsd:double ;
+              prov:wasDerivedFrom <https://production.gtfsrt.vbb.de/data> .
+          <https://example.org/stress/ci> a city:UrbanStressObservation ;
+              city:observedAt "{now}"^^xsd:dateTime ; city:urbanStressIndex "31.0"^^xsd:double ;
+              city:airQualityStressComponent "0.2"^^xsd:double ; city:heatStressComponent "0.0"^^xsd:double ;
+              city:transitStressComponent "0.4"^^xsd:double ;
+              prov:wasDerivedFrom <https://luftdaten.berlin.de/api/lqis/data>,
+                  <https://api.brightsky.dev/current_weather>, <https://production.gtfsrt.vbb.de/data> .
           ''', encoding='utf-8')
           PY
           curl --fail --silent --show-error \
@@ -139,20 +157,35 @@ jobs:
           docker compose logs backend
           exit 1
 
-      - name: Verify Graph Store to API integration
+      - name: Verify persistent SPARQL to API integration
         run: |
           python - <<'PY'
           import json
           from urllib.request import urlopen
 
-          with urlopen('http://localhost:8000/state', timeout=5) as response:
-              state = json.load(response)
-          assert state['active_air_quality_stations'] == 1, state
-          assert state['triple_count'] >= 9, state
+          def get(path):
+              with urlopen(f'http://localhost:8000{path}', timeout=5) as response:
+                  return json.load(response)
 
-          with urlopen('http://localhost:8000/freshness', timeout=5) as response:
-              freshness = json.load(response)
+          ready = get('/ready')
+          assert ready['status'] == 'ready', ready
+
+          state = get('/state')
+          assert state['active_air_quality_stations'] == 1, state
+          assert state['triple_count'] >= 30, state
+
+          freshness = get('/freshness')
           assert all(item['status'] == 'fresh' for item in freshness.values()), freshness
+
+          stations = get('/stations')
+          assert stations[0]['code'] == 'CI001', stations
+          assert get('/air-quality')['worst_grade'] == 2
+          assert get('/weather')['temperature_c'] == 18.2
+          assert get('/transit')['delayed_trip_updates'] == 40
+          assert get('/urban-stress')['index'] == 31.0
+
+          provenance = get('/provenance')
+          assert any(item['source'] == 'https://production.gtfsrt.vbb.de/data' for item in provenance), provenance
           PY
 
       - name: Stop integration stack
