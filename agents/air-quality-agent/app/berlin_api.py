@@ -31,6 +31,10 @@ class BerlinAirQualityClient:
             raise ValueError("station_code must not be empty")
         return self._get(f"/stations/{code}/data")
 
+    def get_lqi_data(self) -> Any:
+        """Return the current official Berlin air-quality index data."""
+        return self._get("/lqis/data")
+
     def _get(self, path: str) -> Any:
         response = self._session.get(
             f"{self.BASE_URL}{path}",
