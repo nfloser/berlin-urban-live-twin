@@ -36,7 +36,7 @@ def create_app(
 
     app = FastAPI(
         title="Berlin Urban Live Twin API",
-        version="0.5.0",
+        version="0.6.0",
         description="Query interface for the semantically integrated urban twin state.",
     )
     app.add_middleware(
@@ -51,7 +51,33 @@ def create_app(
 
     @app.get("/health")
     def health() -> dict[str, str]:
+        """Process liveness. Does not assert that semantic state is available."""
         return {"status": "ok"}
+
+    @app.get("/ready")
+    def ready() -> dict[str, Any]:
+        """Report whether the API can query a non-empty semantic twin state."""
+        try:
+            reload()
+            triple_count = repository.triple_count()
+            freshness = assess_freshness(repository.latest_observation_timestamps())
+        except Exception as exc:  # boundary: dependency/network failures become readiness failures
+            raise HTTPException(
+                status_code=503,
+                detail={"status": "not_ready", "reason": "semantic_store_unavailable"},
+            ) from exc
+
+        missing = sorted(name for name, value in freshness.items() if value["status"] == "missing")
+        if triple_count == 0 or missing:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "status": "not_ready",
+                    "triple_count": triple_count,
+                    "missing_sources": missing,
+                },
+            )
+        return {"status": "ready", "triple_count": triple_count, "freshness": freshness}
 
     @app.get("/state")
     def state() -> dict[str, int]:
