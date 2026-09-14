@@ -10,14 +10,16 @@ The project is intentionally developed in small increments. Tests, implementatio
 
 ## Current prototype
 
-The current prototype contains three live urban-data ingestion domains plus one derived-information agent:
+The prototype contains three live urban-data ingestion domains plus one derived-information agent:
 
-- **Air quality:** retrieves active Berlin monitoring stations and the official, hourly Berlin Luftqualitätsindex (LQI) through the Berlin air-quality REST API. Station and LQI observations are represented separately in RDF and linked semantically.
-- **Weather:** retrieves current Berlin weather observations from Bright Sky, based on open Deutscher Wetterdienst data, and maps them into the shared semantic model.
-- **Public transport:** consumes the official VBB GTFS-Realtime feed, derives an aggregated delay snapshot, and represents that state as RDF.
-- **Urban stress analysis:** reads the persisted RDF outputs of the three source domains and derives an explicitly weighted experimental 0-100 Urban Stress Index.
+- **Air quality:** active Berlin monitoring stations plus the official hourly Berlin Luftqualitätsindex (LQI).
+- **Weather:** current Berlin weather observations through Bright Sky using open Deutscher Wetterdienst data.
+- **Public transport:** official VBB GTFS-Realtime data reduced to a reproducible operational delay snapshot.
+- **Urban stress analysis:** an explicit experimental 0-100 cross-domain index derived from current LQI, heat and transit disruption.
 
-The central refresh workflow runs all source agents first and then the analysis agent. The resulting Turtle files form the persisted semantic state. A FastAPI backend loads these RDF files and uses SPARQL queries to expose station, LQI, weather, transit, derived-stress, graph, and system-state endpoints. A React/MapLibre frontend visualises the live cross-domain state and active monitoring stations.
+The refresh workflow updates all source domains, derives the Urban Stress observation, keeps inspectable Turtle exports, and publishes the integrated graph into a persistent Apache Jena Fuseki/TDB2 store. The FastAPI backend uses the Graph Store as its runtime source when configured, while retaining the file-backed mode for isolated tests and local debugging.
+
+The frontend visualises current conditions, source freshness and station-level LQI information on a Berlin map.
 
 ## Architecture
 
@@ -32,41 +34,58 @@ Berlin Air Quality API       DWD-derived Weather       VBB GTFS-Realtime
                                     v
                               RDF representation
                                     |
-                                    v
-                         shared semantic state
-                              (Turtle / RDFLib)
-                                    |
-                    +---------------+---------------+
-                    |                               |
-                    v                               v
-              SPARQL / FastAPI              Analysis Agent
-                    |                               |
-                    |                     derived RDF observation
-                    +---------------+---------------+
+                             Turtle exports
                                     |
                                     v
-                         React / MapLibre UI
+                              Analysis Agent
+                                    |
+                           derived RDF observation
+                                    |
+                                    v
+                         integrated RDF publication
+                                    |
+                                    v
+                       Apache Jena Fuseki / TDB2
+                         persistent Graph Store
+                                    |
+                                    v
+                           RDFLib/SPARQL query layer
+                                    |
+                                    v
+                             FastAPI backend
+                                    |
+                                    v
+                         React / MapLibre frontend
 ```
-
-The file-backed RDF state is intentionally an intermediate architecture. A persistent graph database is a later infrastructure step once the semantic model and agent boundaries are sufficiently stable.
 
 ## Experimental Urban Stress Index
 
-The prototype's Urban Stress Index is intentionally transparent rather than predictive. It combines:
+The Urban Stress Index is intentionally transparent rather than predictive. It combines:
 
 - 40% air-quality stress from the **worst current official Berlin LQI station grade**;
 - 30% heat stress from the latest temperature observation; and
 - 30% transit stress from the latest share of delayed VBB trip updates.
 
-The result is written back as RDF so that derived information remains inspectable and reproducible. It is an engineering experiment, not an official public-health or transport metric.
+The analysis refuses to derive a value when the newest source observations are more than two hours apart. The result is written back as RDF so that the derivation remains inspectable and reproducible. It is an engineering experiment, not an official public-health or transport metric.
+
+## Data freshness
+
+Persisted data is not automatically treated as live. The backend exposes source-specific freshness states through `GET /freshness` using prototype thresholds:
+
+- air quality: 2 hours;
+- weather: 2 hours;
+- transit: 15 minutes;
+- derived Urban Stress: 2 hours.
+
+Each source is classified as `fresh`, `stale`, or `missing`. The dashboard surfaces this status rather than silently presenting old observations as current.
 
 ## Development approach
 
 The project follows test-driven development where practical. Behaviour is introduced using a Red-Green-Refactor cycle: tests describe the intended behaviour first, the smallest implementation is then added, and structural improvements follow without changing observable behaviour.
 
-GitHub Actions validates the Python agent suites, SPARQL-backed repository and API behaviour, orchestration scripts, frontend tests, TypeScript production build, and container configuration/builds.
+GitHub Actions validates the Python agent suites, semantic mappings, SPARQL-backed repository and API behaviour, orchestration and graph publication, frontend tests, TypeScript production build, Docker Compose configuration, and service-image builds.
 
-See [`docs/development.md`](docs/development.md) for the development strategy and [`docs/architecture.md`](docs/architecture.md) for architectural details.
+See [`docs/development.md`](docs/development.md), [`docs/architecture.md`](docs/architecture.md), and [`docs/analysis.md`](docs/analysis.md).
 
 ## Repository structure
 
@@ -78,6 +97,7 @@ agents/
   analysis-agent/
 backend/
 frontend/
+fuseki/
 ontology/
 docs/
 scripts/
@@ -89,18 +109,26 @@ Each Python domain agent owns its client, validation/mapping logic, semantic map
 
 ## Running the prototype
 
-### 1. Refresh urban data and derived information
+### 1. Build and start the persistent graph store
+
+```bash
+docker compose up -d fuseki
+```
+
+Fuseki is exposed at `http://localhost:3030`; the persistent dataset is published as `/twin` and stored in the Docker volume `fuseki-data`.
+
+### 2. Refresh urban data, derive information, and publish RDF
 
 ```bash
 docker compose run --rm refresh
 ```
 
-This updates air-quality/LQI, weather and transit RDF before deriving `urban-stress.ttl` from that shared state.
+The refresh process writes inspectable Turtle files into `data/`, derives `urban-stress.ttl`, merges the current semantic state, and replaces the Fuseki default graph through the SPARQL Graph Store Protocol.
 
-### 2. Start API and frontend
+### 3. Start API and frontend
 
 ```bash
-docker compose up backend frontend
+docker compose up -d backend frontend
 ```
 
 The API is available at `http://localhost:8000` and the frontend at `http://localhost:8080`.
@@ -110,12 +138,20 @@ Useful API endpoints include:
 ```text
 GET /health
 GET /state
+GET /freshness
 GET /stations
 GET /air-quality
 GET /weather
 GET /transit
 GET /urban-stress
 GET /graph
+```
+
+Fuseki also exposes the persistent dataset at:
+
+```text
+http://localhost:3030/twin/sparql
+http://localhost:3030/twin/data
 ```
 
 ## Local development
@@ -146,14 +182,16 @@ npm test
 npm run dev
 ```
 
+The backend defaults to local Turtle files when `TWIN_GRAPH_STORE_URL` is not set. This keeps unit/integration tests deterministic while the Docker runtime uses the persistent Graph Store.
+
 ## Semantic model
 
 The project vocabulary is maintained in [`ontology/city.ttl`](ontology/city.ttl). RDF mappings use a small project-specific vocabulary together with established geographic predicates where appropriate. SPARQL is used to query the integrated state rather than exposing source-specific JSON structures directly to the presentation layer.
 
 ## Data sources
 
-Source selection and current integration status are documented in [`docs/data-sources.md`](docs/data-sources.md).
+Source selection and integration details are documented in [`docs/data-sources.md`](docs/data-sources.md).
 
 ## Relationship to The World Avatar
 
-The architecture is inspired by concepts used in The World Avatar, including domain-oriented agents, semantic interoperability, knowledge graphs, SPARQL-based access, and derived information. Berlin Urban Live Twin is an independent implementation intended for learning, experimentation, and software-engineering practice; it does not copy The World Avatar source code.
+The architecture is inspired by concepts used in The World Avatar, including domain-oriented agents, semantic interoperability, knowledge graphs, SPARQL-based access, persistent semantic storage, and derived information. Berlin Urban Live Twin is an independent implementation intended for learning, experimentation, and software-engineering practice; it does not copy The World Avatar source code.
