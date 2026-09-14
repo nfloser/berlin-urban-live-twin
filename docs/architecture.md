@@ -2,7 +2,7 @@
 
 ## Architectural goal
 
-Berlin Urban Live Twin is an incremental, knowledge-graph-oriented urban digital twin. External urban-data schemas are kept at system boundaries rather than propagated into the user interface. Each domain is handled by an ingestion agent that retrieves source data, validates and normalises it into an explicit internal model, maps that model to RDF, and contributes to a shared semantic state.
+Berlin Urban Live Twin is a knowledge-graph-oriented urban digital twin. External urban-data schemas stay at system boundaries. Each ingestion domain retrieves source data, validates and normalises it into explicit internal models, maps those models to RDF, records provenance, and contributes to a shared semantic state.
 
 ```text
 External urban data
@@ -17,7 +17,7 @@ Validation / normalisation
 Domain models
         |
         v
-RDF mapping
+RDF + PROV-O mapping
         |
         v
 Turtle domain exports
@@ -26,131 +26,156 @@ Turtle domain exports
 Derived-information agent
         |
         v
-Integrated RDF publication
+SHACL validation
+        |
+        v
+Graph Store publication
         |
         v
 Apache Jena Fuseki / TDB2
         |
         v
-FastAPI query layer
+Direct SPARQL query layer
         |
         v
-React / MapLibre presentation
+FastAPI
+        |
+        v
+React / MapLibre
 ```
 
-## Current domain agents
+## Domain agents
 
 ### Air quality
 
-The air-quality agent retrieves active Berlin monitoring stations and the official hourly Berlin Luftqualitätsindex (LQI). Source payloads are mapped into explicit `AirQualityStation` and `AirQualityIndexObservation` models. RDF separates relatively stable station identity/location from time-dependent LQI observations and links each observation back to its station.
+The air-quality agent retrieves active Berlin monitoring stations and the official hourly Berlin Luftqualitätsindex (LQI). Source payloads become explicit `AirQualityStation` and `AirQualityIndexObservation` models. RDF separates stable station identity/location from time-dependent LQI observations and links observations back to their station. LQI observations record the official Berlin API as their PROV-O source.
 
 ### Weather
 
-The weather agent retrieves a current observation for Berlin through Bright Sky, whose underlying observations are based on open Deutscher Wetterdienst data. The source payload is converted into a `WeatherObservation` before RDF is created for temperature, relative humidity, pressure, wind speed, condition, and observation time.
+The weather agent retrieves a current Berlin observation through Bright Sky. Bright Sky provides access to open Deutscher Wetterdienst observations. The domain model captures time, temperature, relative humidity, pressure, wind and condition. The RDF observation records Bright Sky as its direct derivation source and DWD as the primary upstream source.
 
 ### Transit
 
-The transit agent consumes the official VBB GTFS-Realtime protocol-buffer feed. It derives an aggregated `TransitSnapshot` containing the number of trip updates, the number and share of delayed trips, and maximum observed delay before producing RDF. Aggregation is deliberately performed inside the domain boundary rather than in the frontend.
-
-## Semantic persistence and query layer
-
-Each source agent still serializes its current RDF output as Turtle into `data/`. These files are intentionally retained because they make agent output easy to inspect, test and debug independently.
-
-After source refresh and derived analysis, the orchestration layer merges the current Turtle outputs and publishes the integrated graph through the SPARQL Graph Store Protocol. The Docker runtime uses Apache Jena Fuseki 6.2.0 with a persistent TDB2 dataset named `/twin`. The TDB database is stored in the `fuseki-data` Docker volume.
-
-The backend repository supports two state sources:
-
-1. **Graph Store mode** — used by the Docker runtime. The integrated graph is retrieved from Fuseki and queried with the established RDFLib/SPARQL query layer.
-2. **File-backed mode** — used by deterministic tests and lightweight local development when `TWIN_GRAPH_STORE_URL` is not configured.
-
-This staged migration preserves the existing query behaviour while moving persistence out of flat files. A future optimisation can execute SPARQL queries directly against Fuseki instead of transferring the current default graph into RDFLib for each backend reload.
-
-The backend currently exposes:
-
-- active monitoring stations suitable for spatial presentation;
-- current official station-level Berlin LQI observations;
-- the latest weather observation;
-- the latest aggregated transit observation;
-- the latest derived Urban Stress observation;
-- source freshness metadata;
-- summary information about the integrated graph; and
-- the complete current RDF graph in Turtle format.
+The transit agent consumes the official VBB GTFS-Realtime feed. It derives an explicit `TransitSnapshot` containing total trip updates, delayed updates, delayed share and maximum observed delay. Aggregation occurs inside the domain boundary rather than in the frontend. The resulting observation records the VBB feed through PROV-O.
 
 ## Derived information
 
-The analysis agent calculates an experimental Urban Stress Index from three semantically integrated observations: worst current Berlin LQI grade, latest temperature, and latest VBB delayed-trip share.
+The analysis agent calculates the experimental Urban Stress Index from three semantically integrated quantities: worst current Berlin LQI grade, latest temperature and latest VBB delayed-trip share.
 
-The calculation is transparent and deterministic rather than predictive. Before deriving a value, the agent checks temporal consistency: the latest source observations may be at most two hours apart. Otherwise no derived observation is emitted. The resulting component values and index are themselves represented in RDF and therefore become queryable semantic state.
+The calculation is deterministic and transparent. It rejects source combinations whose newest timestamps differ by more than two hours. The resulting RDF observation records its component values and the three external source datasets from which the derivation ultimately originates.
 
-## Freshness model
+## Semantic validation
 
-Temporal consistency between inputs and absolute freshness are treated as different concerns.
+RDF syntax alone is not considered sufficient. `ontology/shapes.ttl` defines SHACL constraints for all runtime node types.
 
-The backend currently assesses absolute freshness using explicit prototype thresholds:
+The refresh order is:
+
+```text
+source refresh
+    -> domain RDF
+    -> Urban Stress derivation
+    -> integrated graph
+    -> SHACL validation
+    -> persistent publication
+```
+
+Publication is skipped when SHACL validation fails. This means a malformed new refresh cannot replace the previously published graph.
+
+## Persistence and query layer
+
+Each agent writes its current RDF output to `data/` as Turtle. These files remain inspectable and make agent-level behaviour easy to debug.
+
+Operational persistence uses Apache Jena Fuseki with TDB2. The refresh process replaces the current default graph through the SPARQL Graph Store Protocol. The persistent dataset is `/twin` and the TDB2 database lives in the `fuseki-data` Docker volume.
+
+The backend repository has three access modes:
+
+1. **Direct SPARQL mode** — the Docker runtime executes normal API queries directly against `/twin/sparql`, avoiding complete graph downloads.
+2. **Graph Store compatibility mode** — downloads Turtle from a Graph Store endpoint when direct SPARQL is not configured.
+3. **File-backed mode** — loads local Turtle files for deterministic unit tests and lightweight debugging.
+
+The complete graph is intentionally materialised only for explicit graph export use cases such as `GET /graph`.
+
+## API responsibilities
+
+The FastAPI layer exposes:
+
+- liveness and semantic-store readiness;
+- active monitoring stations for spatial presentation;
+- current official station-level Berlin LQI observations;
+- latest weather and transit observations;
+- latest derived Urban Stress observation;
+- source freshness classifications;
+- PROV-O lineage summaries;
+- graph statistics; and
+- the RDF graph export.
+
+The frontend consumes this stable application API and has no direct dependency on Berlin, DWD/Bright-Sky, VBB or Fuseki APIs.
+
+## Freshness and readiness
+
+Temporal consistency during derivation and absolute freshness during presentation are separate concerns.
+
+Current freshness thresholds are:
 
 - air quality: 2 hours;
 - weather: 2 hours;
 - transit: 15 minutes;
-- derived urban stress: 2 hours.
+- Urban Stress: 2 hours.
 
-Each domain is reported as `fresh`, `stale`, or `missing` through `GET /freshness`. This prevents the presentation layer from implying that any persisted observation is automatically live merely because it exists.
+`GET /freshness` reports `fresh`, `stale` or `missing` per domain. `GET /health` tests process liveness only. `GET /ready` additionally verifies that the semantic store is queryable, non-empty and contains all required observation classes.
 
 ## Runtime architecture
 
 ```text
                          docker compose
                                |
-             +-----------------+------------------+
-             |                                    |
-             v                                    v
-       refresh service                      Fuseki service
-             |                                    |
- source APIs -> RDF exports                       | TDB2 volume
-             |                                    |
-             v                                    |
-       analysis agent                             |
-             |                                    |
-             v                                    |
-     integrated RDF -- Graph Store PUT ---------->|
-                                                  |
-                                                  v
-                                           persistent /twin
-                                                  |
-                                                  v
-                                           backend service
-                                                  |
-                                                  v
-                                            FastAPI :8000
-                                                  |
-                                                  v
-                                           frontend :8080
+       +-----------------------+-----------------------+
+       |                                               |
+       v                                               v
+ refresh service                                  Fuseki/TDB2
+       |                                               |
+ source APIs                                          | persistent volume
+       |                                               |
+ domain RDF + PROV-O                                  |
+       |                                               |
+ analysis                                              |
+       |                                               |
+ SHACL gate                                            |
+       |                                               |
+       +----------- Graph Store PUT ------------------>| 
+                                                       |
+                                                       v
+                                                  /twin dataset
+                                                       |
+                                                direct SPARQL
+                                                       |
+                                                       v
+                                                   backend
+                                                       |
+                                                       v
+                                                 FastAPI :8000
+                                                       |
+                                                       v
+                                                frontend :8080
 ```
 
-The frontend communicates only with the backend and therefore has no knowledge of the original external APIs or storage technology.
+## Verification strategy
 
-## Validation strategy
-
-The persistent-store integration is covered at several levels:
-
-- unit tests for Graph Store publication;
-- repository tests for remote Graph Store loading;
-- Docker image and Compose validation;
-- an end-to-end CI check that starts Fuseki, seeds RDF through Graph Store HTTP, starts the backend, and verifies API state and freshness through the real container network.
-
-This keeps infrastructure changes subject to the same test-driven contract as application code.
+The architecture is verified at multiple levels. Independent unit suites test source mapping, domain models and semantic mapping. Backend tests exercise SPARQL query behaviour. Orchestration tests verify refresh order, SHACL gating and graph publication. Frontend tests and the production build validate the presentation layer. Container CI starts Fuseki, seeds a complete semantic fixture, starts the backend and exercises the complete persistent API surface. A separate scheduled live-source workflow runs the real external APIs through the same refresh/publish/query path.
 
 ## Design principles
 
-1. **External schemas remain at the boundary.** JSON and GTFS-Realtime structures are converted into explicit internal models before semantic conversion.
-2. **Semantic representation is a first-class concern.** RDF is produced from validated domain objects rather than arbitrary external payloads.
-3. **Presentation is decoupled from ingestion.** The frontend consumes a stable backend interface rather than external city APIs.
-4. **Derived information is reproducible.** Analytical outputs are deterministic, time-checked, and represented as RDF together with their component values.
-5. **Freshness is explicit.** Persisted data is not automatically treated as live; age and source-specific thresholds are observable.
-6. **Persistence is standards-based.** The integrated graph is published through standard Graph Store HTTP and served by a SPARQL-capable TDB2 store.
-7. **Infrastructure is introduced progressively.** Inspectable Turtle exports remain available while persistent semantic storage is introduced behind a tested repository boundary.
-8. **Development is test-driven where practical.** Behavioural changes are specified by automated tests before implementation.
-9. **Domain agents remain independently testable.** Each agent owns its models, mappings, dependencies, and tests.
+1. External source schemas terminate at domain boundaries.
+2. RDF is generated from validated internal models, not raw payloads.
+3. Semantic constraints are executable through SHACL.
+4. Observation lineage is queryable through PROV-O.
+5. Derived information is transparent, deterministic and time-checked.
+6. Freshness and readiness are explicit rather than implied.
+7. Runtime persistence and query access use standard RDF/SPARQL protocols.
+8. The UI is decoupled from ingestion and storage technology.
+9. Infrastructure changes are protected by integration tests.
+10. Domain agents remain independently testable.
 
 ## Relationship to The World Avatar
 
-The project is inspired by architectural concepts used by The World Avatar: domain-oriented agents, semantic interoperability, knowledge graphs, SPARQL-based access, persistent semantic storage, and derived information. It is an independent implementation for learning and experimentation rather than a copy of The World Avatar codebase.
+The project is inspired by architectural concepts used by The World Avatar: domain-oriented agents, semantic interoperability, knowledge graphs, SPARQL-based access, persistent semantic storage and derived information. It is an independent implementation for learning and experimentation rather than a copy of The World Avatar codebase.
