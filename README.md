@@ -1,5 +1,7 @@
 # Berlin Urban Live Twin
 
+**Version 1.0.0**
+
 An urban digital twin reference implementation that integrates real-world Berlin data into a persistent semantic knowledge graph for cross-domain environmental and mobility analysis.
 
 ## Objective
@@ -145,6 +147,7 @@ docs/
 scripts/
 data/
 .github/workflows/
+VERSION
 docker-compose.yml
 ```
 
@@ -193,6 +196,7 @@ The backend and repository abstractions retain local Turtle modes for determinis
 - [`docs/data-sources.md`](docs/data-sources.md) — public data sources and source constraints
 - [`docs/analysis.md`](docs/analysis.md) — Urban Stress methodology and limitations
 - [`docs/development.md`](docs/development.md) — incremental/TDD development strategy
+- [`docs/limitations.md`](docs/limitations.md) — explicit v1 scope and production limitations
 - [`docs/decisions/`](docs/decisions/) — architectural decision records
 
 ## Relationship to The World Avatar
