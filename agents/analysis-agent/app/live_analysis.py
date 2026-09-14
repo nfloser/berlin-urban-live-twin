@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from rdflib import Graph
 
 from app.urban_stress import UrbanStressResult, calculate_urban_stress
+
+MAX_SOURCE_TIME_SPREAD = timedelta(hours=2)
 
 
 def _load_graph(data_directory: Path) -> Graph:
@@ -20,10 +22,12 @@ def _load_graph(data_directory: Path) -> Graph:
 
 
 def derive_latest_urban_stress(data_directory: Path) -> tuple[UrbanStressResult, datetime]:
-    """Derive the latest city-level stress value from domain observations.
+    """Derive stress only from sufficiently time-aligned domain observations.
 
     Air quality uses the worst current station LQI as a conservative city-level
-    signal. Weather and transit use their latest available observations.
+    signal. Weather and transit use their latest available observations. The
+    three source timestamps may differ by at most two hours so that the result
+    does not combine materially stale and current conditions.
     """
     graph = _load_graph(data_directory)
 
@@ -70,6 +74,9 @@ def derive_latest_urban_stress(data_directory: Path) -> tuple[UrbanStressResult,
         datetime.fromisoformat(str(weather[1]).replace("Z", "+00:00")),
         datetime.fromisoformat(str(transit[1]).replace("Z", "+00:00")),
     ]
+    if max(timestamps) - min(timestamps) > MAX_SOURCE_TIME_SPREAD:
+        raise ValueError("Cross-domain observations are temporally inconsistent")
+
     result = calculate_urban_stress(
         air_quality_grade=float(air[0]),
         temperature_c=float(weather[0]),
