@@ -2,27 +2,41 @@ import { useEffect, useState } from "react";
 
 import MapView from "./MapView";
 import {
+  fetchAirQuality,
   fetchStations,
   fetchTransit,
+  fetchUrbanStress,
   fetchWeather,
+  type AirQualityState,
   type Station,
   type TransitState,
+  type UrbanStressState,
   type WeatherState,
 } from "./api";
 import "./styles.css";
 
 export default function App() {
   const [stations, setStations] = useState<Station[]>([]);
+  const [airQuality, setAirQuality] = useState<AirQualityState | null>(null);
   const [weather, setWeather] = useState<WeatherState | null>(null);
   const [transit, setTransit] = useState<TransitState | null>(null);
+  const [urbanStress, setUrbanStress] = useState<UrbanStressState | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchStations(), fetchWeather(), fetchTransit()])
-      .then(([stationData, weatherData, transitData]) => {
+    Promise.all([
+      fetchStations(),
+      fetchAirQuality(),
+      fetchWeather(),
+      fetchTransit(),
+      fetchUrbanStress(),
+    ])
+      .then(([stationData, airData, weatherData, transitData, stressData]) => {
         setStations(stationData);
+        setAirQuality(airData);
         setWeather(weatherData);
         setTransit(transitData);
+        setUrbanStress(stressData);
       })
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : "Unable to load urban twin state.");
@@ -43,6 +57,18 @@ export default function App() {
       {error ? <p className="error">{error}</p> : null}
 
       <section className="metrics" aria-label="Current urban conditions">
+        <article className="metric-card">
+          <span>Urban stress</span>
+          <strong>{urbanStress ? `${urbanStress.index.toFixed(1)} / 100` : "—"}</strong>
+          <small>Experimental cross-domain indicator</small>
+        </article>
+
+        <article className="metric-card">
+          <span>Air quality</span>
+          <strong>{airQuality ? `LQI ${airQuality.worst_grade}` : "—"}</strong>
+          <small>{airQuality ? `Worst current grade across ${airQuality.stations.length} stations` : "Awaiting official LQI"}</small>
+        </article>
+
         <article className="metric-card">
           <span>Weather</span>
           <strong>{weather?.temperature_c != null ? `${weather.temperature_c.toFixed(1)} °C` : "—"}</strong>
