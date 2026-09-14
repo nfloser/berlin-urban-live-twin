@@ -2,13 +2,15 @@
 
 from datetime import datetime
 
-from rdflib import RDF, XSD, Literal, URIRef
+from rdflib import RDF, XSD, Literal, Namespace, URIRef
 
 from app.models import WeatherObservation
 from app.rdf_mapper import CITY, weather_to_graph
 
+PROV = Namespace("http://www.w3.org/ns/prov#")
 
-def test_weather_to_graph_creates_observation_triples() -> None:
+
+def test_weather_to_graph_creates_observation_triples_and_lineage() -> None:
     observation = WeatherObservation(
         observed_at=datetime.fromisoformat("2026-09-14T08:00:00+00:00"),
         temperature_c=18.2,
@@ -24,3 +26,5 @@ def test_weather_to_graph_creates_observation_triples() -> None:
     assert (subject, RDF.type, CITY.WeatherObservation) in graph
     assert (subject, CITY.temperatureCelsius, Literal(18.2, datatype=XSD.double)) in graph
     assert (subject, CITY.relativeHumidityPercent, Literal(63.0, datatype=XSD.double)) in graph
+    assert (subject, PROV.wasDerivedFrom, URIRef("https://api.brightsky.dev/current_weather")) in graph
+    assert (subject, PROV.hadPrimarySource, URIRef("https://www.dwd.de/")) in graph
