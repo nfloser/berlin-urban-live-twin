@@ -16,6 +16,15 @@ def test_health_endpoint_reports_service_status(tmp_path: Path) -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_ready_endpoint_rejects_empty_twin_state(tmp_path: Path) -> None:
+    client = TestClient(create_app(tmp_path))
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["status"] == "not_ready"
+
+
 def test_state_endpoint_reports_loaded_twin_summary(tmp_path: Path) -> None:
     (tmp_path / "air.ttl").write_text(
         """
