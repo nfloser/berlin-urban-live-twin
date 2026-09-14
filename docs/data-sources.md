@@ -9,12 +9,15 @@ Public REST documentation: https://luftdaten.berlin.de/api/doc
 The current implementation uses:
 
 - `GET https://luftdaten.berlin.de/api/stations`
+- `GET https://luftdaten.berlin.de/api/lqis/data`
 
-Station payloads provide identifiers, names, geographic coordinates, activity state, address information, station groups, and information about measured components. These values are normalised into an internal station model before RDF conversion.
+Station payloads are normalised into an internal monitoring-station model before RDF conversion. The LQI endpoint provides current Berlin short-term air-quality-index observations. These are represented as separate RDF observations linked back to their monitoring station.
 
-The API also exposes measurement and Berlin air-quality-index endpoints. Live pollutant/LQI ingestion is intentionally not yet represented in the shared graph and is the next air-quality data increment. Until that contract is implemented and tested, the project does not infer air-quality conditions from station metadata alone.
+The official Berlin LQI is recalculated hourly. It expresses air quality on a school-grade scale from 1 (very good) to 6 (very poor). The station-level LQI is the highest pollutant-specific index class available at that station. The Berlin methodology uses NO2 and O3 one-hour means, CO moving eight-hour means, and PM10/PM2.5 moving 24-hour means when classifying the pollutant-specific sub-indices.
 
-The underlying Berlin open-data catalogue also publishes current and historical measurements for pollutants including NOx, ozone, carbon monoxide, benzene, sulphur dioxide, PM10, PM2.5, and elemental black carbon.
+LQI methodology: https://luftdaten.berlin.de/lqi/info
+
+The API also exposes lower-level station and component measurement endpoints. Raw pollutant concentration ingestion remains a future extension; the live prototype currently uses the official calculated LQI rather than reproducing the Berlin authority's rolling-window calculations independently.
 
 ## Weather
 
