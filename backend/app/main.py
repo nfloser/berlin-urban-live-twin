@@ -13,14 +13,24 @@ from app.freshness import assess_freshness
 from app.repository import TwinRepository
 
 
-def create_app(data_directory: Path | None = None) -> FastAPI:
-    """Create the API application for a given persisted RDF data directory."""
+def create_app(
+    data_directory: Path | None = None,
+    graph_store_url: str | None = None,
+) -> FastAPI:
+    """Create the API application for a file-backed or Graph-Store-backed state."""
     directory = data_directory or Path(os.getenv("TWIN_DATA_DIR", "data"))
-    repository = TwinRepository(directory)
+    configured_store = graph_store_url
+    if configured_store is None and data_directory is None:
+        configured_store = os.getenv("TWIN_GRAPH_STORE_URL")
+
+    repository = TwinRepository(
+        directory,
+        graph_store_url=configured_store,
+    )
 
     app = FastAPI(
         title="Berlin Urban Live Twin API",
-        version="0.3.0",
+        version="0.4.0",
         description="Query interface for the semantically integrated urban twin state.",
     )
     app.add_middleware(
