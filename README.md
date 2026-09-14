@@ -1,91 +1,131 @@
 # Berlin Urban Live Twin
 
-An urban digital twin project that integrates real-world data to create a dynamic representation of Berlin and support cross-domain analysis of environmental, mobility, and infrastructure conditions.
+An urban digital twin reference implementation that integrates real-world Berlin data into a persistent semantic knowledge graph for cross-domain environmental and mobility analysis.
 
-## Project objective
+## Objective
 
-Berlin Urban Live Twin explores how heterogeneous urban data can be integrated into a shared semantic representation rather than consumed independently by a conventional dashboard. Domain-specific agents retrieve external data, validate and normalise it into explicit internal models, and transform those models into RDF. The resulting semantic state can then be queried across domains and exposed through a common API and spatial user interface.
+Berlin Urban Live Twin demonstrates how heterogeneous city data can be treated as one queryable semantic state instead of a collection of unrelated dashboard APIs. Domain agents isolate external source schemas, validate and normalise observations, convert them to RDF, and publish the integrated state into a persistent Apache Jena Fuseki/TDB2 knowledge graph.
 
-The project is intentionally developed in small increments. Tests, implementation, documentation, and infrastructure are introduced step by step so that the evolution of the design remains visible in the repository history.
+The repository is intentionally developed in observable increments. The commit history shows the evolution from individual source clients to semantic integration, persistent SPARQL storage, derived information, validation, provenance, API access, spatial presentation, and end-to-end integration tests.
 
-## Current prototype
+## v1 capabilities
 
-The prototype contains three live urban-data ingestion domains plus one derived-information agent:
+The v1 reference implementation integrates four semantic domains:
 
-- **Air quality:** active Berlin monitoring stations plus the official hourly Berlin Luftqualitätsindex (LQI).
-- **Weather:** current Berlin weather observations through Bright Sky using open Deutscher Wetterdienst data.
-- **Public transport:** official VBB GTFS-Realtime data reduced to a reproducible operational delay snapshot.
-- **Urban stress analysis:** an explicit experimental 0-100 cross-domain index derived from current LQI, heat and transit disruption.
+- **Air quality:** active monitoring stations plus the official hourly Berlin Luftqualitätsindex (LQI).
+- **Weather:** current Berlin observations through Bright Sky, based on open Deutscher Wetterdienst data.
+- **Public transport:** the official VBB GTFS-Realtime feed reduced to an explicit city-level delay snapshot.
+- **Derived information:** a transparent experimental Urban Stress Index combining LQI, temperature and transit disruption.
 
-The refresh workflow updates all source domains, derives the Urban Stress observation, keeps inspectable Turtle exports, and publishes the integrated graph into a persistent Apache Jena Fuseki/TDB2 store. The FastAPI backend uses the Graph Store as its runtime source when configured, while retaining the file-backed mode for isolated tests and local debugging.
-
-The frontend visualises current conditions, source freshness and station-level LQI information on a Berlin map.
-
-## Architecture
+Every refresh follows the same controlled path:
 
 ```text
-Berlin Air Quality API       DWD-derived Weather       VBB GTFS-Realtime
-          |                         |                         |
-          v                         v                         v
-   Air Quality Agent          Weather Agent             Transit Agent
-          |                         |                         |
-          +------------ validation / domain models ----------+
-                                    |
-                                    v
-                              RDF representation
-                                    |
-                             Turtle exports
-                                    |
-                                    v
-                              Analysis Agent
-                                    |
-                           derived RDF observation
-                                    |
-                                    v
-                         integrated RDF publication
-                                    |
-                                    v
-                       Apache Jena Fuseki / TDB2
-                         persistent Graph Store
-                                    |
-                                    v
-                           RDFLib/SPARQL query layer
-                                    |
-                                    v
-                             FastAPI backend
-                                    |
-                                    v
-                         React / MapLibre frontend
+External APIs
+    |
+    v
+source-specific clients
+    |
+    v
+validated domain models
+    |
+    v
+RDF mappings + PROV-O lineage
+    |
+    v
+Turtle exports
+    |
+    v
+cross-domain analysis
+    |
+    v
+SHACL validation
+    |
+    v
+Graph Store publication
+    |
+    v
+Apache Jena Fuseki / TDB2
+    |
+    +---- direct SPARQL queries ----> FastAPI ----> React / MapLibre
 ```
+
+Turtle files remain inspectable export/debug artefacts. The Docker runtime reads operational state directly through the Fuseki SPARQL endpoint instead of downloading the complete graph for every API request.
+
+## Semantic quality and provenance
+
+The integrated graph is validated against [`ontology/shapes.ttl`](ontology/shapes.ttl) before it can replace the persistent graph. SHACL constraints cover required properties, datatypes and bounded values for stations, LQI, weather, transit and derived Urban Stress observations.
+
+Observations also carry W3C PROV-O lineage. The API endpoint `GET /provenance` queries this lineage from the graph itself and reports which observation types were derived from which external sources.
 
 ## Experimental Urban Stress Index
 
-The Urban Stress Index is intentionally transparent rather than predictive. It combines:
+The Urban Stress Index is deliberately interpretable rather than predictive:
 
-- 40% air-quality stress from the **worst current official Berlin LQI station grade**;
-- 30% heat stress from the latest temperature observation; and
-- 30% transit stress from the latest share of delayed VBB trip updates.
+```text
+UrbanStress = 100 * (0.40 * air_quality + 0.30 * heat + 0.30 * transit)
+```
 
-The analysis refuses to derive a value when the newest source observations are more than two hours apart. The result is written back as RDF so that the derivation remains inspectable and reproducible. It is an engineering experiment, not an official public-health or transport metric.
+Air-quality stress uses the worst current official Berlin LQI station grade, heat stress uses current temperature, and transit stress uses the share of delayed VBB trip updates. The analysis refuses to emit a value if the newest source observations are more than two hours apart.
 
-## Data freshness
+The index is an engineering demonstrator for cross-domain semantic derivation. It is not an official health, mobility or policy metric.
 
-Persisted data is not automatically treated as live. The backend exposes source-specific freshness states through `GET /freshness` using prototype thresholds:
+## Freshness and service health
+
+Persisted data is never assumed to be live merely because it exists. `GET /freshness` classifies observations using source-specific thresholds:
 
 - air quality: 2 hours;
 - weather: 2 hours;
 - transit: 15 minutes;
-- derived Urban Stress: 2 hours.
+- Urban Stress: 2 hours.
 
-Each source is classified as `fresh`, `stale`, or `missing`. The dashboard surfaces this status rather than silently presenting old observations as current.
+`GET /health` is a lightweight process-liveness endpoint. `GET /ready` additionally verifies that the semantic store is queryable, non-empty and contains observations for all required domains.
 
-## Development approach
+## Runtime
 
-The project follows test-driven development where practical. Behaviour is introduced using a Red-Green-Refactor cycle: tests describe the intended behaviour first, the smallest implementation is then added, and structural improvements follow without changing observable behaviour.
+Build and start the persistent store:
 
-GitHub Actions validates the Python agent suites, semantic mappings, SPARQL-backed repository and API behaviour, orchestration and graph publication, frontend tests, TypeScript production build, Docker Compose configuration, and service-image builds.
+```bash
+docker compose up -d fuseki
+```
 
-See [`docs/development.md`](docs/development.md), [`docs/architecture.md`](docs/architecture.md), and [`docs/analysis.md`](docs/analysis.md).
+Refresh all real source domains, derive cross-domain information, validate the integrated RDF graph and publish it:
+
+```bash
+docker compose run --rm refresh
+```
+
+Start API and frontend:
+
+```bash
+docker compose up -d backend frontend
+```
+
+Runtime endpoints:
+
+```text
+Frontend            http://localhost:8080
+FastAPI             http://localhost:8000
+OpenAPI             http://localhost:8000/docs
+Fuseki              http://localhost:3030
+SPARQL               http://localhost:3030/twin/sparql
+Graph Store          http://localhost:3030/twin/data
+```
+
+Useful API routes:
+
+```text
+GET /health
+GET /ready
+GET /state
+GET /freshness
+GET /provenance
+GET /stations
+GET /air-quality
+GET /weather
+GET /transit
+GET /urban-stress
+GET /graph
+```
 
 ## Repository structure
 
@@ -99,73 +139,36 @@ backend/
 frontend/
 fuseki/
 ontology/
+  city.ttl
+  shapes.ttl
 docs/
 scripts/
 data/
+.github/workflows/
 docker-compose.yml
 ```
 
-Each Python domain agent owns its client, validation/mapping logic, semantic mapping, tests, and runtime dependencies. This keeps external source schemas isolated from the shared semantic representation.
+Each domain agent owns its source client, source-to-domain mapping, models, RDF mapping and tests. External JSON and Protocol Buffer schemas therefore terminate at domain boundaries rather than leaking into the semantic model or frontend.
 
-## Running the prototype
+## Verification strategy
 
-### 1. Build and start the persistent graph store
+The normal `Tests` workflow is deterministic. It runs all independent Python suites, backend/SPARQL tests, orchestration and SHACL tests, frontend tests and production build, Docker builds, and a container integration test that exercises Fuseki -> SPARQL -> FastAPI using a deterministic semantic fixture.
 
-```bash
-docker compose up -d fuseki
-```
-
-Fuseki is exposed at `http://localhost:3030`; the persistent dataset is published as `/twin` and stored in the Docker volume `fuseki-data`.
-
-### 2. Refresh urban data, derive information, and publish RDF
-
-```bash
-docker compose run --rm refresh
-```
-
-The refresh process writes inspectable Turtle files into `data/`, derives `urban-stress.ttl`, merges the current semantic state, and replaces the Fuseki default graph through the SPARQL Graph Store Protocol.
-
-### 3. Start API and frontend
-
-```bash
-docker compose up -d backend frontend
-```
-
-The API is available at `http://localhost:8000` and the frontend at `http://localhost:8080`.
-
-Useful API endpoints include:
-
-```text
-GET /health
-GET /state
-GET /freshness
-GET /stations
-GET /air-quality
-GET /weather
-GET /transit
-GET /urban-stress
-GET /graph
-```
-
-Fuseki also exposes the persistent dataset at:
-
-```text
-http://localhost:3030/twin/sparql
-http://localhost:3030/twin/data
-```
+A separate scheduled `Live source smoke test` exercises the real Berlin air-quality, Bright Sky/DWD and VBB endpoints through the complete refresh/publish/query path. Keeping this separate prevents transient third-party outages from making normal commit CI non-deterministic.
 
 ## Local development
 
-For an individual Python agent, create a virtual environment inside that agent directory and install its development requirements:
+Python agent example:
 
 ```bash
+cd agents/air-quality-agent
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 PYTHONPATH=. pytest
 ```
 
-On Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
 .venv\Scripts\Activate.ps1
@@ -173,7 +176,7 @@ $env:PYTHONPATH="."
 pytest
 ```
 
-Frontend development:
+Frontend:
 
 ```bash
 cd frontend
@@ -182,16 +185,16 @@ npm test
 npm run dev
 ```
 
-The backend defaults to local Turtle files when `TWIN_GRAPH_STORE_URL` is not set. This keeps unit/integration tests deterministic while the Docker runtime uses the persistent Graph Store.
+The backend and repository abstractions retain local Turtle modes for deterministic tests and debugging, while the Compose runtime uses persistent Fuseki/TDB2 storage and direct remote SPARQL queries.
 
-## Semantic model
+## Documentation
 
-The project vocabulary is maintained in [`ontology/city.ttl`](ontology/city.ttl). RDF mappings use a small project-specific vocabulary together with established geographic predicates where appropriate. SPARQL is used to query the integrated state rather than exposing source-specific JSON structures directly to the presentation layer.
-
-## Data sources
-
-Source selection and integration details are documented in [`docs/data-sources.md`](docs/data-sources.md).
+- [`docs/architecture.md`](docs/architecture.md) — runtime and semantic architecture
+- [`docs/data-sources.md`](docs/data-sources.md) — public data sources and source constraints
+- [`docs/analysis.md`](docs/analysis.md) — Urban Stress methodology and limitations
+- [`docs/development.md`](docs/development.md) — incremental/TDD development strategy
+- [`docs/decisions/`](docs/decisions/) — architectural decision records
 
 ## Relationship to The World Avatar
 
-The architecture is inspired by concepts used in The World Avatar, including domain-oriented agents, semantic interoperability, knowledge graphs, SPARQL-based access, persistent semantic storage, and derived information. Berlin Urban Live Twin is an independent implementation intended for learning, experimentation, and software-engineering practice; it does not copy The World Avatar source code.
+The design is inspired by architectural ideas used in The World Avatar: domain-oriented agents, semantic interoperability, knowledge graphs, SPARQL-based access, persistent semantic storage and derived information. Berlin Urban Live Twin is an independent implementation for learning and software-engineering experimentation and does not copy The World Avatar source code.
