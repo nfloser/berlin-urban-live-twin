@@ -37,12 +37,7 @@ class TwinRepository:
         self.graph = Graph()
 
     def reload(self) -> None:
-        """Recreate the repository graph from the configured state source.
-
-        SPARQL mode keeps data remote and executes subsequent queries directly
-        against the endpoint. Graph Store mode downloads Turtle as a compatibility
-        path. Local mode loads inspectable Turtle exports from disk.
-        """
+        """Recreate the repository graph from the configured state source."""
         if self._sparql_endpoint_url:
             self.graph = create_remote_graph(self._sparql_endpoint_url)
             return
@@ -71,7 +66,6 @@ class TwinRepository:
         return int(row[0]) if row is not None else 0
 
     def triple_count(self) -> int:
-        """Return graph size without requiring full graph materialisation."""
         query = "SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o . }"
         row = next(iter(self.graph.query(query)), None)
         return int(row[0]) if row is not None else 0
@@ -168,8 +162,31 @@ class TwinRepository:
             "transit_component": float(row[4]),
         }
 
+    def provenance_summary(self) -> list[dict[str, Any]]:
+        """Summarise observation lineage recorded with PROV-O."""
+        query = """
+        PREFIX city: <https://example.org/berlin/ontology/>
+        PREFIX prov: <http://www.w3.org/ns/prov#>
+        SELECT ?type ?source (COUNT(?observation) AS ?count)
+        WHERE {
+            ?observation a ?type ; prov:wasDerivedFrom ?source .
+            VALUES ?type {
+                city:AirQualityIndexObservation
+                city:WeatherObservation
+                city:TransitObservation
+                city:UrbanStressObservation
+            }
+        }
+        GROUP BY ?type ?source
+        ORDER BY ?type ?source
+        """
+        rows = []
+        for row in self.graph.query(query):
+            type_name = str(row[0]).rsplit("/", 1)[-1]
+            rows.append({"observation_type": type_name, "source": str(row[1]), "count": int(row[2])})
+        return rows
+
     def latest_observation_timestamps(self) -> dict[str, datetime | None]:
-        """Return the latest timestamp for each live or derived observation class."""
         classes = {
             "air_quality": "AirQualityIndexObservation",
             "weather": "WeatherObservation",
