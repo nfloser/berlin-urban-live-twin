@@ -2,10 +2,13 @@
 
 from datetime import datetime
 
-from rdflib import RDF, XSD, Literal, URIRef
+from rdflib import RDF, XSD, Literal, Namespace, URIRef
 
 from app.models import AirQualityIndexObservation, AirQualityStation
 from app.rdf_mapper import CITY, GEO, lqi_to_graph, station_to_graph
+
+PROV = Namespace("http://www.w3.org/ns/prov#")
+BERLIN_LQI_SOURCE = URIRef("https://luftdaten.berlin.de/api/lqis/data")
 
 
 def test_station_to_graph_creates_semantic_station_representation() -> None:
@@ -29,7 +32,7 @@ def test_station_to_graph_creates_semantic_station_representation() -> None:
     assert (subject, CITY.isActive, Literal(True, datatype=XSD.boolean)) in graph
 
 
-def test_lqi_to_graph_links_observation_to_station_and_components() -> None:
+def test_lqi_to_graph_links_observation_to_station_components_and_source() -> None:
     observation = AirQualityIndexObservation(
         station_code="MC010",
         observed_at=datetime.fromisoformat("2026-09-14T08:00:00+00:00"),
@@ -47,3 +50,4 @@ def test_lqi_to_graph_links_observation_to_station_and_components() -> None:
     assert (subject, CITY.observedAtStation, station) in graph
     assert (subject, CITY.lqiPM10, Literal(2, datatype=XSD.integer)) in graph
     assert (subject, CITY.lqiO3, Literal(3, datatype=XSD.integer)) in graph
+    assert (subject, PROV.wasDerivedFrom, BERLIN_LQI_SOURCE) in graph
