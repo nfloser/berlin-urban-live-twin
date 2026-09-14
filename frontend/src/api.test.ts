@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchAirQuality, fetchStations, fetchTransit, fetchUrbanStress, fetchWeather } from "./api";
+import { fetchAirQuality, fetchFreshness, fetchStations, fetchTransit, fetchUrbanStress, fetchWeather } from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -44,5 +44,19 @@ describe("urban twin API client", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => stress }));
 
     await expect(fetchUrbanStress()).resolves.toEqual(stress);
+  });
+
+  it("loads explicit source freshness metadata", async () => {
+    const freshness = {
+      air_quality: { status: "fresh", observed_at: "2026-09-14T08:00:00+00:00", age_seconds: 1200, threshold_seconds: 7200 },
+      weather: { status: "fresh", observed_at: "2026-09-14T08:10:00+00:00", age_seconds: 600, threshold_seconds: 7200 },
+      transit: { status: "fresh", observed_at: "2026-09-14T08:18:00+00:00", age_seconds: 120, threshold_seconds: 900 },
+      urban_stress: { status: "fresh", observed_at: "2026-09-14T08:18:00+00:00", age_seconds: 120, threshold_seconds: 7200 },
+    };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => freshness });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchFreshness()).resolves.toEqual(freshness);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/freshness");
   });
 });
