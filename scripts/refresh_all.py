@@ -1,4 +1,4 @@
-"""Run all domain ingestion agents and persist their RDF outputs."""
+"""Run all ingestion agents and derive the shared urban-twin state."""
 
 from __future__ import annotations
 
@@ -15,17 +15,21 @@ AGENTS = (
 )
 
 
+def _run(command: list[str], cwd: Path) -> None:
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = "."
+    subprocess.run(command, cwd=cwd, env=environment, check=True)
+
+
 def refresh_all(repo_root: Path | None = None) -> None:
-    """Execute each agent sequentially and write RDF into the shared data directory."""
+    """Refresh source domains first, then derive cross-domain information."""
     root = repo_root or Path(__file__).resolve().parents[1]
     data_dir = root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
     for agent_name, output_name in AGENTS:
         agent_dir = root / "agents" / agent_name
-        environment = os.environ.copy()
-        environment["PYTHONPATH"] = "."
-        subprocess.run(
+        _run(
             [
                 sys.executable,
                 "-m",
@@ -34,9 +38,20 @@ def refresh_all(repo_root: Path | None = None) -> None:
                 str(data_dir / output_name),
             ],
             cwd=agent_dir,
-            env=environment,
-            check=True,
         )
+
+    _run(
+        [
+            sys.executable,
+            "-m",
+            "app.main",
+            "--data-dir",
+            str(data_dir),
+            "--output",
+            str(data_dir / "urban-stress.ttl"),
+        ],
+        cwd=root / "agents" / "analysis-agent",
+    )
 
 
 if __name__ == "__main__":
