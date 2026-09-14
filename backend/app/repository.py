@@ -1,4 +1,4 @@
-"""Repository abstraction for the persisted RDF representation of the twin."""
+"""Repository abstraction for querying the semantic twin state."""
 
 from __future__ import annotations
 
@@ -8,27 +8,45 @@ from typing import Any
 
 import requests
 from rdflib import Graph
+from rdflib.plugins.stores.sparqlstore import SPARQLStore
+
+
+def create_remote_graph(sparql_endpoint_url: str) -> Graph:
+    """Create an RDFLib graph whose queries execute directly against SPARQL."""
+    store = SPARQLStore(query_endpoint=sparql_endpoint_url)
+    return Graph(store=store)
 
 
 class TwinRepository:
-    """Load and query the semantic twin state from Graph Store or Turtle files."""
+    """Query twin state from SPARQL, Graph Store, or local Turtle files."""
 
     def __init__(
         self,
         data_directory: Path,
         *,
+        sparql_endpoint_url: str | None = None,
         graph_store_url: str | None = None,
         session: requests.Session | None = None,
         timeout: int = 10,
     ) -> None:
         self._data_directory = data_directory
+        self._sparql_endpoint_url = sparql_endpoint_url
         self._graph_store_url = graph_store_url
         self._session = session or requests.Session()
         self._timeout = timeout
         self.graph = Graph()
 
     def reload(self) -> None:
-        """Rebuild the in-memory graph from the configured semantic-state source."""
+        """Recreate the repository graph from the configured state source.
+
+        SPARQL mode keeps data remote and executes subsequent queries directly
+        against the endpoint. Graph Store mode downloads Turtle as a compatibility
+        path. Local mode loads inspectable Turtle exports from disk.
+        """
+        if self._sparql_endpoint_url:
+            self.graph = create_remote_graph(self._sparql_endpoint_url)
+            return
+
         graph = Graph()
         if self._graph_store_url:
             response = self._session.get(
@@ -49,6 +67,12 @@ class TwinRepository:
         SELECT (COUNT(?station) AS ?count)
         WHERE { ?station a city:AirQualityStation ; city:isActive true . }
         """
+        row = next(iter(self.graph.query(query)), None)
+        return int(row[0]) if row is not None else 0
+
+    def triple_count(self) -> int:
+        """Return graph size without requiring full graph materialisation."""
+        query = "SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o . }"
         row = next(iter(self.graph.query(query)), None)
         return int(row[0]) if row is not None else 0
 
