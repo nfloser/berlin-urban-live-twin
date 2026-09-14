@@ -37,6 +37,18 @@ export interface UrbanStressState {
   transit_component: number;
 }
 
+export interface FreshnessEntry {
+  status: "fresh" | "stale" | "missing";
+  observed_at: string | null;
+  age_seconds: number | null;
+  threshold_seconds: number;
+}
+
+export type FreshnessState = Record<
+  "air_quality" | "weather" | "transit" | "urban_stress",
+  FreshnessEntry
+>;
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 async function getJson<T>(path: string): Promise<T> {
@@ -65,4 +77,8 @@ export function fetchTransit(): Promise<TransitState> {
 
 export function fetchUrbanStress(): Promise<UrbanStressState> {
   return getJson<UrbanStressState>("/urban-stress");
+}
+
+export function fetchFreshness(): Promise<FreshnessState> {
+  return getJson<FreshnessState>("/freshness");
 }
