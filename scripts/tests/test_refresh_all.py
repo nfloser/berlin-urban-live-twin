@@ -6,8 +6,11 @@ from unittest.mock import patch
 from scripts.refresh_all import refresh_all
 
 
-def test_refresh_all_runs_domain_agents_then_analysis_agent(tmp_path: Path) -> None:
-    with patch("scripts.refresh_all.subprocess.run") as run:
+def test_refresh_all_runs_domain_agents_then_analysis_agent_and_validation(tmp_path: Path) -> None:
+    with (
+        patch("scripts.refresh_all.subprocess.run") as run,
+        patch("scripts.refresh_all.validate_integrated_graph", return_value=17) as validate,
+    ):
         refresh_all(repo_root=tmp_path)
 
     assert run.call_count == 4
@@ -33,11 +36,16 @@ def test_refresh_all_runs_domain_agents_then_analysis_agent(tmp_path: Path) -> N
         "--output",
         str(tmp_path / "data" / "urban-stress.ttl"),
     ]
+    validate.assert_called_once_with(
+        tmp_path / "data",
+        tmp_path / "ontology" / "shapes.ttl",
+    )
 
 
-def test_refresh_all_publishes_integrated_graph_when_store_url_is_configured(tmp_path: Path) -> None:
+def test_refresh_all_validates_before_publishing_integrated_graph(tmp_path: Path) -> None:
     with (
         patch("scripts.refresh_all.subprocess.run"),
+        patch("scripts.refresh_all.validate_integrated_graph", return_value=42) as validate,
         patch("scripts.refresh_all.publish_graph", return_value=42) as publish,
     ):
         result = refresh_all(
@@ -45,6 +53,7 @@ def test_refresh_all_publishes_integrated_graph_when_store_url_is_configured(tmp
             graph_store_url="http://fuseki:3030/twin/data?default",
         )
 
+    validate.assert_called_once()
     publish.assert_called_once_with(
         tmp_path / "data",
         "http://fuseki:3030/twin/data?default",
