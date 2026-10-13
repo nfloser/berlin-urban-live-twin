@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Urban Stress Index is an exploratory derived-information model used to demonstrate how observations from independent urban domains can be transformed into a new semantic quantity. It is not intended as a validated public-health, mobility, or policy indicator.
+The Urban Stress Index combines observations from separate urban domains into an experimental semantic measure. It has not been validated as a public-health, mobility or policy indicator.
 
 The live model combines three interpretable components:
 
@@ -38,7 +38,7 @@ The current composite index is:
 UrbanStress = 100 * (0.40 * A + 0.30 * H + 0.30 * T)
 ```
 
-The weights and thresholds are deliberately explicit. This makes the derivation reproducible and allows later empirical calibration without changing the semantic integration architecture.
+The formula records its weights and thresholds so results can be reproduced. The coefficients can later be calibrated from empirical data without changing the semantic integration architecture.
 
 ## Temporal consistency
 
