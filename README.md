@@ -2,13 +2,13 @@
 
 **Version 1.0.0**
 
-An urban digital twin reference implementation that integrates real-world Berlin data into a persistent semantic knowledge graph for cross-domain environmental and mobility analysis.
+Berlin Urban Live Twin is a reference implementation that stores real Berlin environmental and mobility data in a persistent semantic knowledge graph for cross-domain analysis.
 
 ## Objective
 
-Berlin Urban Live Twin demonstrates how heterogeneous city data can be treated as one queryable semantic state instead of a collection of unrelated dashboard APIs. Domain agents isolate external source schemas, validate and normalise observations, convert them to RDF, and publish the integrated state into a persistent Apache Jena Fuseki/TDB2 knowledge graph.
+The system brings different city data sources into one queryable semantic state. Domain agents isolate external source schemas, validate and normalise observations, convert them to RDF, and publish the integrated state into a persistent Apache Jena Fuseki/TDB2 knowledge graph.
 
-The repository is intentionally developed in observable increments. The commit history shows the evolution from individual source clients to semantic integration, persistent SPARQL storage, derived information, validation, provenance, API access, spatial presentation, and end-to-end integration tests.
+The commit history tracks the progression from individual source clients to persistent SPARQL storage, derived information, validation, provenance, API access, spatial presentation and end-to-end integration tests.
 
 ## v1 capabilities
 
